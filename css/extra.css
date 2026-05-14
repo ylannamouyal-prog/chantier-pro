@@ -926,96 +926,197 @@
   font-size: var(--fs-xs);
 }
 
-/* ========== PLANNING — Filtres multi & événements ========== */
-.planning-filters-bar {
-  display: flex;
-  flex-wrap: wrap;
+/* ========== PLANNING — Layout avec sidebar filtres ========== */
+.planning-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
   gap: var(--s-4);
   align-items: flex-start;
-  padding: var(--s-3);
+}
+.planning-main {
+  min-width: 0; /* empêche le contenu de pousser au-delà */
+}
+
+.planning-sidebar {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  margin-bottom: var(--s-4);
-}
-.planning-filter-group {
+  padding: var(--s-4);
+  position: sticky;
+  top: var(--s-4);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--s-2);
-  min-width: 200px;
-  flex: 1;
+  gap: var(--s-4);
 }
-.planning-filter-group__label {
+.planning-sidebar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--border);
+}
+.planning-sidebar__header h3 {
+  margin: 0;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--txt-primary);
+}
+.btn-icon--ghost {
+  background: transparent;
+  border: 1px solid transparent;
+}
+.btn-icon--ghost:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+/* Section de filtres */
+.planning-filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.planning-filter-section__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--s-1);
   font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--txt-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.planning-filter-count {
+  font-size: 11px;
   font-weight: 600;
   color: var(--txt-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.planning-checks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.check-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
   background: var(--bg-sunken);
-  border: 1px solid var(--border);
+  padding: 2px 7px;
+  border-radius: var(--r-full);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Ligne de filtre individuelle */
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 7px var(--s-2);
   border-radius: var(--r-md);
-  font-size: var(--fs-sm);
   cursor: pointer;
   user-select: none;
-  transition: all var(--t-fast);
+  transition: background var(--t-fast);
+  font-size: var(--fs-sm);
 }
-.check-chip:hover {
+.filter-row:hover {
   background: var(--bg-hover);
-  border-color: var(--border-strong);
 }
-.check-chip input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
+.filter-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
   cursor: pointer;
   accent-color: #3b82f6;
+  flex-shrink: 0;
+  margin: 0;
 }
-.check-chip input[type="checkbox"]:checked + span {
-  font-weight: 600;
+.filter-row__color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
 }
-.check-chip:has(input:checked) {
-  background: var(--bg-elevated);
-  border-color: var(--border-strong);
+.filter-row__color--empty {
+  background: transparent;
+  border: 1.5px dashed var(--border-strong);
 }
-.check-chip--commandes {
-  border-color: #f59e0b !important;
-  background: rgba(245, 158, 11, 0.08) !important;
+.filter-row__icon {
+  font-size: 16px;
+  flex-shrink: 0;
 }
-.check-chip--commandes.is-active {
-  background: #f59e0b !important;
-  color: white !important;
-  border-color: #d97706 !important;
+.filter-row__label {
+  flex: 1;
+  color: var(--txt-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.check-chip--commandes.is-active input[type="checkbox"] {
-  accent-color: white;
-}
-.check-badge {
+.filter-row__badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  margin-left: 4px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
   background: #ef4444;
   color: white;
   border-radius: var(--r-full);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
+  flex-shrink: 0;
 }
-.check-chip--commandes.is-active .check-badge {
+.filter-row--master {
+  font-weight: 600;
+}
+.filter-row--master .filter-row__label {
+  color: var(--txt-secondary);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.filter-row--muted .filter-row__label {
+  color: var(--txt-muted);
+  font-style: italic;
+}
+.filter-row__divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* Filtre Commandes — style spécial */
+.filter-row--commandes {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  margin-top: var(--s-1);
+  padding: var(--s-2);
+}
+.filter-row--commandes:hover {
+  background: rgba(245, 158, 11, 0.12);
+}
+.filter-row--commandes input[type="checkbox"] {
+  accent-color: #f59e0b;
+}
+.filter-row--commandes.is-active {
+  background: #f59e0b;
+  border-color: #d97706;
+}
+.filter-row--commandes.is-active .filter-row__label,
+.filter-row--commandes.is-active .filter-row__icon {
+  color: white;
+  font-weight: 600;
+}
+.filter-row--commandes.is-active input[type="checkbox"] {
+  accent-color: white;
+}
+.filter-row--commandes.is-active .filter-row__badge {
   background: white;
   color: #d97706;
+}
+.filter-row__hint {
+  margin-top: var(--s-2);
+  padding: var(--s-2);
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+  font-size: var(--fs-xs);
+  color: var(--txt-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 /* Événements commande dans le calendrier */
@@ -1041,10 +1142,24 @@
   50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.5); }
 }
 
-/* Responsive planning filters */
-@media (max-width: 768px) {
-  .planning-filters-bar { flex-direction: column; gap: var(--s-3); }
-  .planning-filter-group { min-width: 0; width: 100%; }
+/* Responsive — sidebar passe sous le calendrier sur mobile/tablette */
+@media (max-width: 1024px) {
+  .planning-layout {
+    grid-template-columns: 1fr;
+  }
+  .planning-sidebar {
+    position: static;
+    max-height: none;
+    order: -1; /* sidebar avant le calendrier sur mobile */
+  }
+  .planning-filter-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 4px;
+  }
+  .planning-filter-section__title {
+    grid-column: 1 / -1;
+  }
 }
 
 /* ========== RESPONSIVE ========== */
