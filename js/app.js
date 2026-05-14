@@ -11,6 +11,7 @@
     '/stocks': { module: 'Stocks', title: 'Stocks', nav: 'stocks' },
     '/engins': { module: 'Engins', title: 'Engins', nav: 'engins' },
     '/fournisseurs': { module: 'Fournisseurs', title: 'Fournisseurs', nav: 'fournisseurs' },
+    '/commandes': { module: 'Commandes', title: 'Commandes', nav: 'commandes' },
     '/equipes': { module: 'Equipes', title: 'Équipes', nav: 'equipes' },
     '/parametres': { module: 'Parametres', title: 'Paramètres', nav: 'parametres' }
   };
@@ -133,6 +134,7 @@
             case 'new-cote': Router.navigate('/chantiers'); Toast.info('Sélectionnez un chantier pour ses cotes'); break;
             case 'new-fourniture': Router.navigate('/stocks'); break;
             case 'new-engin': Router.navigate('/engins'); break;
+            case 'new-commande': window.Commandes?.openForm?.(); break;
           }
         });
       });
