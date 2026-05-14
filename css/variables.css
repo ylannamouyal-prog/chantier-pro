@@ -1,0 +1,163 @@
+/* =================================================================
+   DESIGN TOKENS — ChantierPro
+   Système de couleurs, espaces, typographie, ombres
+   Palette : Bleu nuit profond + accents cyan/ambre — sobre, BTP pro
+   ================================================================= */
+
+:root {
+  /* === Couleurs primaires === */
+  --c-primary-50:  #EFF6FF;
+  --c-primary-100: #DBEAFE;
+  --c-primary-200: #BFDBFE;
+  --c-primary-300: #93C5FD;
+  --c-primary-400: #60A5FA;
+  --c-primary-500: #3B82F6;
+  --c-primary-600: #2563EB;
+  --c-primary-700: #1D4ED8;
+  --c-primary-800: #1E40AF;
+  --c-primary-900: #1E3A8A;
+
+  /* === Couleurs sémantiques === */
+  --c-success: #10B981;
+  --c-success-bg: #ECFDF5;
+  --c-warning: #F59E0B;
+  --c-warning-bg: #FFFBEB;
+  --c-danger:  #EF4444;
+  --c-danger-bg: #FEF2F2;
+  --c-info:    #06B6D4;
+  --c-info-bg: #ECFEFF;
+
+  /* === Couleurs statuts chantiers === */
+  --c-status-pending:  #94A3B8;
+  --c-status-quote:    #A855F7;
+  --c-status-ordered:  #06B6D4;
+  --c-status-planned:  #3B82F6;
+  --c-status-ongoing:  #F59E0B;
+  --c-status-done:     #10B981;
+  --c-status-delayed:  #EF4444;
+
+  /* === Couleurs conducteurs (palette agréable) === */
+  --c-team-1: #3B82F6;
+  --c-team-2: #10B981;
+  --c-team-3: #F59E0B;
+  --c-team-4: #A855F7;
+  --c-team-5: #EC4899;
+  --c-team-6: #06B6D4;
+  --c-team-7: #EF4444;
+  --c-team-8: #8B5CF6;
+
+  /* === Espacements (échelle 4px) === */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+  --s-16: 64px;
+  --s-20: 80px;
+
+  /* === Rayons === */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-2xl: 28px;
+  --r-full: 9999px;
+
+  /* === Typographie === */
+  --font-display: 'Bricolage Grotesque', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --fs-xs: 11px;
+  --fs-sm: 12.5px;
+  --fs-base: 14px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+  --fs-3xl: 34px;
+  --fs-4xl: 44px;
+
+  --lh-tight: 1.2;
+  --lh-normal: 1.5;
+  --lh-relaxed: 1.7;
+
+  /* === Transitions === */
+  --t-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --t-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --t-slow: 320ms cubic-bezier(0.4, 0, 0.2, 1);
+  --t-spring: 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* === Z-index === */
+  --z-sidebar: 50;
+  --z-header: 40;
+  --z-dropdown: 100;
+  --z-modal: 200;
+  --z-toast: 300;
+}
+
+/* =================================================================
+   THÈME CLAIR
+   ================================================================= */
+[data-theme="light"] {
+  --bg-app:       #F8FAFC;
+  --bg-elevated: #FFFFFF;
+  --bg-sunken:    #F1F5F9;
+  --bg-hover:     #F1F5F9;
+  --bg-active:    #E2E8F0;
+  --bg-sidebar:   #FFFFFF;
+  --bg-overlay:   rgba(15, 23, 42, 0.55);
+
+  --txt-primary:   #0F172A;
+  --txt-secondary: #475569;
+  --txt-muted:     #94A3B8;
+  --txt-inverse:   #FFFFFF;
+
+  --border:        #E2E8F0;
+  --border-strong: #CBD5E1;
+  --border-subtle: #F1F5F9;
+
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 2px 4px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.10), 0 4px 8px rgba(15, 23, 42, 0.04);
+  --shadow-xl: 0 24px 48px rgba(15, 23, 42, 0.14);
+
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(15, 23, 42, 0.06);
+}
+
+/* =================================================================
+   THÈME SOMBRE
+   ================================================================= */
+[data-theme="dark"] {
+  --bg-app:       #0B1220;
+  --bg-elevated: #111827;
+  --bg-sunken:    #0A0F1C;
+  --bg-hover:     #1F2937;
+  --bg-active:    #374151;
+  --bg-sidebar:   #0F172A;
+  --bg-overlay:   rgba(0, 0, 0, 0.7);
+
+  --txt-primary:   #F1F5F9;
+  --txt-secondary: #94A3B8;
+  --txt-muted:     #64748B;
+  --txt-inverse:   #0F172A;
+
+  --border:        #1F2937;
+  --border-strong: #334155;
+  --border-subtle: #1A2234;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.75);
+
+  --glass-bg: rgba(15, 23, 42, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.06);
+}

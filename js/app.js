@@ -1,0 +1,189 @@
+// ChantierPro - Application principale & Router
+(function () {
+  'use strict';
+
+  const ROUTES = {
+    '/dashboard': { module: 'Dashboard', title: 'Tableau de bord', nav: 'dashboard' },
+    '/planning': { module: 'Planning', title: 'Planning', nav: 'planning' },
+    '/chantiers': { module: 'Chantiers', title: 'Chantiers', nav: 'chantiers' },
+    '/cotes': { module: 'Cotes', title: 'Prises de cotes', nav: 'cotes', needsParam: true },
+    '/clients': { module: 'Clients', title: 'Clients', nav: 'clients' },
+    '/stocks': { module: 'Stocks', title: 'Stocks', nav: 'stocks' },
+    '/engins': { module: 'Engins', title: 'Engins', nav: 'engins' },
+    '/fournisseurs': { module: 'Fournisseurs', title: 'Fournisseurs', nav: 'fournisseurs' },
+    '/equipes': { module: 'Equipes', title: 'Équipes', nav: 'equipes' },
+    '/parametres': { module: 'Parametres', title: 'Paramètres', nav: 'parametres' }
+  };
+
+  const Router = {
+    current: null,
+    currentParam: null,
+
+    parse() {
+      const hash = location.hash.slice(1) || '/dashboard';
+      const parts = hash.split('/').filter(Boolean);
+      const path = '/' + (parts[0] || 'dashboard');
+      const param = parts[1] || null;
+      return { path, param };
+    },
+
+    route() {
+      const { path, param } = this.parse();
+      const route = ROUTES[path];
+      if (!route) { location.hash = '#/dashboard'; return; }
+
+      this.current = path;
+      this.currentParam = param;
+
+      // Active nav
+      document.querySelectorAll('.nav-item').forEach(el => {
+        el.classList.toggle('is-active', el.dataset.route === route.nav);
+      });
+
+      // Title
+      document.title = `${route.title} — ChantierPro`;
+
+      // Mobile : close sidebar
+      document.getElementById('sidebar')?.classList.remove('is-open');
+
+      const view = document.getElementById('view');
+      view.innerHTML = '<div class="view-loading"><div class="loader"></div></div>';
+
+      // Render after micro-task
+      setTimeout(() => {
+        const mod = window[route.module];
+        if (!mod || typeof mod.render !== 'function') {
+          view.innerHTML = `<div class="empty-state"><h2>Module ${route.module} non chargé</h2></div>`;
+          return;
+        }
+        try {
+          if (route.needsParam) mod.render(view, param);
+          else mod.render(view);
+        } catch (err) {
+          console.error(err);
+          view.innerHTML = `<div class="empty-state"><h2>Erreur</h2><p>${err.message}</p></div>`;
+        }
+      }, 30);
+    },
+
+    refresh() {
+      this.route();
+    },
+
+    navigate(path) {
+      location.hash = '#' + path;
+    }
+  };
+
+  window.Router = Router;
+
+  // Theme management
+  function applyTheme(theme) {
+    let actual = theme;
+    if (theme === 'auto' || !theme) {
+      actual = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    document.documentElement.setAttribute('data-theme', actual);
+    const btn = document.getElementById('themeToggle');
+    if (btn) btn.textContent = actual === 'dark' ? '☀️' : '🌙';
+  }
+  window.applyTheme = applyTheme;
+
+  function bindSidebar() {
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        Router.navigate('/' + item.dataset.route);
+      });
+    });
+  }
+
+  function bindHeader() {
+    // Theme toggle
+    document.getElementById('themeToggle')?.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      const next = current === 'dark' ? 'light' : 'dark';
+      Store.commit('theme', state => {
+        if (!state.parametres) state.parametres = {};
+        state.parametres.theme = next;
+      });
+      applyTheme(next);
+    });
+
+    // Quick menu
+    const quickBtn = document.getElementById('quickAddBtn');
+    const quickMenu = document.getElementById('quickMenu');
+    if (quickBtn && quickMenu) {
+      quickBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        quickMenu.classList.toggle('is-open');
+      });
+      document.addEventListener('click', (e) => {
+        if (!quickBtn.contains(e.target) && !quickMenu.contains(e.target)) {
+          quickMenu.classList.remove('is-open');
+        }
+      });
+      quickMenu.querySelectorAll('[data-action]').forEach(item => {
+        item.addEventListener('click', () => {
+          quickMenu.classList.remove('is-open');
+          const action = item.dataset.action;
+          switch (action) {
+            case 'new-chantier': window.Chantiers?.openCreate?.(); break;
+            case 'new-client': window.Clients?.openCreate?.(); break;
+            case 'new-cote': Router.navigate('/chantiers'); Toast.info('Sélectionnez un chantier pour ses cotes'); break;
+            case 'new-fourniture': Router.navigate('/stocks'); break;
+            case 'new-engin': Router.navigate('/engins'); break;
+          }
+        });
+      });
+    }
+
+    // Mobile menu
+    document.getElementById('menuBtn')?.addEventListener('click', () => {
+      document.getElementById('sidebar')?.classList.toggle('is-open');
+    });
+
+    // Search
+    window.Search?.init();
+  }
+
+  function updateBadges() {
+    const enCours = Store.state.chantiers.filter(c => Helpers.computeStatus(c) === 'en-cours').length;
+    const badge = document.getElementById('badgeChantiers');
+    if (badge) {
+      badge.textContent = enCours;
+      badge.style.display = enCours > 0 ? 'inline-flex' : 'none';
+    }
+  }
+
+  function boot() {
+    // 1) Load store
+    Store.load();
+    // 2) If empty, load demo
+    if (Store.state.chantiers.length === 0 && Store.state.clients.length === 0) {
+      Store.loadDemoData();
+    }
+    // 3) Theme
+    applyTheme(Store.state.parametres?.theme);
+    // 4) Subscribe for badges update
+    Store.subscribe(() => updateBadges());
+    updateBadges();
+    // 5) Bind UI
+    bindSidebar();
+    bindHeader();
+    // 6) Route
+    window.addEventListener('hashchange', () => Router.route());
+    Router.route();
+
+    // Listen to system theme changes if auto
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if ((Store.state.parametres?.theme || 'auto') === 'auto') applyTheme('auto');
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0F172A" />
+  <title>ChantierPro — Gestion Menuiserie & Vitrage</title>
+
+  <!-- Fonts: Bricolage Grotesque (display) + Inter Tight (body) — distinctives, pro -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- Librairies externes (CDN) -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" rel="stylesheet" />
+
+  <!-- Styles applicatifs -->
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/modules.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
+  <link rel="stylesheet" href="css/extra.css" />
+</head>
+<body>
+  <!-- =========================================================
+       APP SHELL — Sidebar fixe + Header + Vue dynamique
+       ========================================================= -->
+  <div class="app-shell" id="appShell">
+
+    <!-- ============== SIDEBAR ============== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar__brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28">
+            <defs>
+              <linearGradient id="brandGrad" x1="0" x2="1" y1="0" y2="1">
+                <stop offset="0" stop-color="#3B82F6" />
+                <stop offset="1" stop-color="#0EA5E9" />
+              </linearGradient>
+            </defs>
+            <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#brandGrad)" />
+            <path d="M9 22 L16 9 L23 22 Z" fill="none" stroke="white" stroke-width="2.2" stroke-linejoin="round"/>
+            <circle cx="16" cy="18" r="1.6" fill="white" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">ChantierPro</span>
+          <span class="brand-sub">Menuiserie · Vitrage</span>
+        </div>
+      </div>
+
+      <nav class="sidebar__nav" id="sidebarNav">
+        <div class="nav-section-label">Pilotage</div>
+        <a href="#/dashboard"   class="nav-item" data-route="dashboard">
+          <span class="nav-icon">◐</span><span>Tableau de bord</span>
+        </a>
+        <a href="#/planning"    class="nav-item" data-route="planning">
+          <span class="nav-icon">▦</span><span>Planning</span>
+        </a>
+
+        <div class="nav-section-label">Opérations</div>
+        <a href="#/chantiers"   class="nav-item" data-route="chantiers">
+          <span class="nav-icon">⏍</span><span>Chantiers</span>
+          <span class="nav-badge" id="badgeChantiers">0</span>
+        </a>
+        <a href="#/cotes"       class="nav-item" data-route="cotes">
+          <span class="nav-icon">⊟</span><span>Prises de cotes</span>
+        </a>
+        <a href="#/clients"     class="nav-item" data-route="clients">
+          <span class="nav-icon">◉</span><span>Clients</span>
+        </a>
+
+        <div class="nav-section-label">Logistique</div>
+        <a href="#/stocks"      class="nav-item" data-route="stocks">
+          <span class="nav-icon">▤</span><span>Stocks</span>
+        </a>
+        <a href="#/engins"      class="nav-item" data-route="engins">
+          <span class="nav-icon">⚙</span><span>Engins</span>
+        </a>
+        <a href="#/fournisseurs" class="nav-item" data-route="fournisseurs">
+          <span class="nav-icon">⌂</span><span>Fournisseurs</span>
+        </a>
+
+        <div class="nav-section-label">Équipe</div>
+        <a href="#/equipes"     class="nav-item" data-route="equipes">
+          <span class="nav-icon">◈</span><span>Équipes & Conducteurs</span>
+        </a>
+
+        <div class="nav-section-label">Système</div>
+        <a href="#/parametres"  class="nav-item" data-route="parametres">
+          <span class="nav-icon">✦</span><span>Paramètres</span>
+        </a>
+      </nav>
+
+      <div class="sidebar__footer">
+        <button class="theme-toggle" id="themeToggle" title="Changer de thème">
+          <span class="theme-icon-light">☀</span>
+          <span class="theme-icon-dark">☾</span>
+          <span class="theme-label">Thème</span>
+        </button>
+        <div class="sidebar__version">v1.0 · Build 2026.05</div>
+      </div>
+    </aside>
+
+    <!-- ============== ZONE PRINCIPALE ============== -->
+    <main class="main">
+
+      <!-- HEADER -->
+      <header class="header">
+        <button class="header__menu-btn" id="menuBtn" aria-label="Menu">
+          <span></span><span></span><span></span>
+        </button>
+
+        <div class="header__search">
+          <span class="search-icon">⌕</span>
+          <input
+            type="text"
+            id="globalSearch"
+            placeholder="Rechercher chantier, client, fourniture, adresse…"
+            autocomplete="off"
+          />
+          <kbd class="search-kbd">⌘K</kbd>
+          <div class="search-results" id="searchResults"></div>
+        </div>
+
+        <div class="header__actions">
+          <button class="btn btn--ghost" id="quickAddBtn" title="Création rapide">
+            <span class="btn-icon">+</span><span class="btn-text">Nouveau</span>
+          </button>
+          <button class="icon-btn" id="notifBtn" title="Notifications">
+            <span>◔</span>
+            <span class="notif-dot"></span>
+          </button>
+        </div>
+      </header>
+
+      <!-- VUE — injectée dynamiquement par le router -->
+      <section class="view" id="view"></section>
+    </main>
+  </div>
+
+  <!-- ============ MODAL CONTAINER ============ -->
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <div class="modal" id="modal" role="dialog" aria-modal="true">
+      <header class="modal__header">
+        <h2 class="modal__title" id="modalTitle">Titre</h2>
+        <button class="modal__close" id="modalClose" aria-label="Fermer">✕</button>
+      </header>
+      <div class="modal__body" id="modalBody"></div>
+      <footer class="modal__footer" id="modalFooter"></footer>
+    </div>
+  </div>
+
+  <!-- ============ TOAST CONTAINER ============ -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <!-- ============ QUICK-ADD MENU ============ -->
+  <div class="quick-menu" id="quickMenu" hidden>
+    <button data-action="new-chantier">  <span>⏍</span> Nouveau chantier</button>
+    <button data-action="new-client">    <span>◉</span> Nouveau client</button>
+    <button data-action="new-cote">      <span>⊟</span> Nouvelle prise de cotes</button>
+    <button data-action="new-engin">     <span>⚙</span> Réserver un engin</button>
+    <button data-action="new-fourniture"><span>▤</span> Ajouter une fourniture</button>
+  </div>
+
+  <!-- ============ COMMAND PALETTE (⌘K) ============ -->
+  <!-- Placeholder pour extension future -->
+
+  <!-- ============ LIBS EXTERNES ============ -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales/fr.global.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+  <script src="https://npmcdn.com/flatpickr/dist/l10n/fr.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- ============ APPLICATION ============ -->
+  <!-- Ordre IMPORTANT : utils → store → données → composants → modules → app -->
+  <script src="js/utils/helpers.js"></script>
+  <script src="js/utils/dom.js"></script>
+  <script src="js/utils/toast.js"></script>
+  <script src="js/utils/modal.js"></script>
+  <script src="js/utils/format.js"></script>
+
+  <script src="js/data/store.js"></script>
+  <script src="js/data/demo-data.js"></script>
+
+  <script src="js/components/ui.js"></script>
+
+  <script src="js/modules/dashboard.js"></script>
+  <script src="js/modules/planning.js"></script>
+  <script src="js/modules/chantiers.js"></script>
+  <script src="js/modules/cotes.js"></script>
+  <script src="js/modules/clients.js"></script>
+  <script src="js/modules/stocks.js"></script>
+  <script src="js/modules/engins.js"></script>
+  <script src="js/modules/fournisseurs.js"></script>
+  <script src="js/modules/equipes.js"></script>
+  <script src="js/modules/parametres.js"></script>
+
+  <script src="js/modules/pdf-export.js"></script>
+  <script src="js/modules/excel-export.js"></script>
+  <script src="js/modules/search.js"></script>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
