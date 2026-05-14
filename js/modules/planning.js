@@ -46,58 +46,82 @@ const Planning = {
         `
       })}
 
-      <div class="planning-filters-bar">
-        <div class="planning-filter-group">
-          <div class="planning-filter-group__label">👤 Conducteurs</div>
-          <div class="planning-checks">
-            <label class="check-chip">
-              <input type="checkbox" data-toggle-group="conducteurs" ${this._allChecked('conducteurs', conducteurs.map(c => c.id).concat('__none__')) ? 'checked' : ''}>
-              <span>Tous</span>
-            </label>
-            ${conducteurs.map(c => `
-              <label class="check-chip" style="border-left:3px solid ${c.couleur}">
-                <input type="checkbox" data-filter-cond="${c.id}" ${this._filters.conducteurs.has(c.id) ? 'checked' : ''}>
-                <span>${Helpers.esc(c.nom)}</span>
-              </label>
-            `).join('')}
-            <label class="check-chip">
-              <input type="checkbox" data-filter-cond="__none__" ${this._filters.conducteurs.has('__none__') ? 'checked' : ''}>
-              <span>Sans conducteur</span>
-            </label>
+      <div class="planning-layout">
+        <div class="planning-main">
+          <div class="calendar-wrap">
+            <div id="calendar"></div>
           </div>
         </div>
 
-        ${equipes.length > 0 ? `
-          <div class="planning-filter-group">
-            <div class="planning-filter-group__label">👷 Équipes</div>
-            <div class="planning-checks">
-              <label class="check-chip">
-                <input type="checkbox" data-toggle-group="equipes" ${this._allChecked('equipes', equipes.map(e => e.id)) ? 'checked' : ''}>
-                <span>Toutes</span>
+        <aside class="planning-sidebar">
+          <div class="planning-sidebar__header">
+            <h3>Filtres</h3>
+            <button class="btn-icon btn-icon--ghost" id="planningResetFilters" title="Tout réinitialiser">↻</button>
+          </div>
+
+          <div class="planning-filter-section">
+            <div class="planning-filter-section__title">
+              <span>👤 Conducteurs</span>
+              <span class="planning-filter-count">${this._filters.conducteurs.size}/${conducteurs.length + 1}</span>
+            </div>
+            <label class="filter-row filter-row--master">
+              <input type="checkbox" data-toggle-group="conducteurs" ${this._allChecked('conducteurs', conducteurs.map(c => c.id).concat('__none__')) ? 'checked' : ''}>
+              <span class="filter-row__label">Tout sélectionner</span>
+            </label>
+            <div class="filter-row__divider"></div>
+            ${conducteurs.map(c => `
+              <label class="filter-row">
+                <input type="checkbox" data-filter-cond="${c.id}" ${this._filters.conducteurs.has(c.id) ? 'checked' : ''}>
+                <span class="filter-row__color" style="background:${c.couleur}"></span>
+                <span class="filter-row__label">${Helpers.esc(c.nom)}</span>
               </label>
+            `).join('')}
+            <label class="filter-row filter-row--muted">
+              <input type="checkbox" data-filter-cond="__none__" ${this._filters.conducteurs.has('__none__') ? 'checked' : ''}>
+              <span class="filter-row__color filter-row__color--empty"></span>
+              <span class="filter-row__label">Sans conducteur</span>
+            </label>
+          </div>
+
+          ${equipes.length > 0 ? `
+            <div class="planning-filter-section">
+              <div class="planning-filter-section__title">
+                <span>👷 Équipes</span>
+                <span class="planning-filter-count">${this._filters.equipes.size}/${equipes.length}</span>
+              </div>
+              <label class="filter-row filter-row--master">
+                <input type="checkbox" data-toggle-group="equipes" ${this._allChecked('equipes', equipes.map(e => e.id)) ? 'checked' : ''}>
+                <span class="filter-row__label">Tout sélectionner</span>
+              </label>
+              <div class="filter-row__divider"></div>
               ${equipes.map(e => `
-                <label class="check-chip" style="border-left:3px solid ${e.couleur}">
+                <label class="filter-row">
                   <input type="checkbox" data-filter-eq="${e.id}" ${this._filters.equipes.has(e.id) ? 'checked' : ''}>
-                  <span>${Helpers.esc(e.nom)}</span>
+                  <span class="filter-row__color" style="background:${e.couleur}"></span>
+                  <span class="filter-row__label">${Helpers.esc(e.nom)}</span>
                 </label>
               `).join('')}
             </div>
-          </div>
-        ` : ''}
+          ` : ''}
 
-        <div class="planning-filter-group">
-          <div class="planning-filter-group__label">📦 Logistique</div>
-          <div class="planning-checks">
-            <label class="check-chip check-chip--commandes ${this._filters.commandes ? 'is-active' : ''}">
+          <div class="planning-filter-section">
+            <div class="planning-filter-section__title">
+              <span>📦 Logistique</span>
+            </div>
+            <label class="filter-row filter-row--commandes ${this._filters.commandes ? 'is-active' : ''}">
               <input type="checkbox" data-filter-commandes ${this._filters.commandes ? 'checked' : ''}>
-              <span>Commandes ${totalIndicateurs > 0 ? `<span class="check-badge">${totalIndicateurs}</span>` : ''}</span>
+              <span class="filter-row__icon">📦</span>
+              <span class="filter-row__label">Commandes & alertes</span>
+              ${totalIndicateurs > 0 ? `<span class="filter-row__badge">${totalIndicateurs}</span>` : ''}
             </label>
+            ${this._filters.commandes && totalIndicateurs > 0 ? `
+              <div class="filter-row__hint">
+                ${commandesMois > 0 ? `<div>📦 ${commandesMois} commande${commandesMois > 1 ? 's' : ''} ce mois</div>` : ''}
+                ${alertes.length > 0 ? `<div>⚠️ ${alertes.length} fourniture${alertes.length > 1 ? 's' : ''} à commander</div>` : ''}
+              </div>
+            ` : ''}
           </div>
-        </div>
-      </div>
-
-      <div class="calendar-wrap">
-        <div id="calendar"></div>
+        </aside>
       </div>
     `;
 
@@ -359,7 +383,7 @@ const Planning = {
         if (e.target.checked) this._filters.conducteurs.add(id);
         else this._filters.conducteurs.delete(id);
         this._refreshEvents();
-        this._syncGroupToggle('conducteurs');
+        this._updateSidebar();
       });
     });
 
@@ -369,7 +393,7 @@ const Planning = {
         if (e.target.checked) this._filters.equipes.add(id);
         else this._filters.equipes.delete(id);
         this._refreshEvents();
-        this._syncGroupToggle('equipes');
+        this._updateSidebar();
       });
     });
 
@@ -386,29 +410,46 @@ const Planning = {
           view.querySelectorAll('[data-filter-eq]').forEach(c => { c.checked = e.target.checked; });
         }
         this._refreshEvents();
+        this._updateSidebar();
       });
     });
 
     const cmdCheck = view.querySelector('[data-filter-commandes]');
     cmdCheck?.addEventListener('change', (e) => {
       this._filters.commandes = e.target.checked;
-      const chip = e.target.closest('.check-chip--commandes');
-      if (chip) chip.classList.toggle('is-active', e.target.checked);
+      const row = e.target.closest('.filter-row--commandes');
+      if (row) row.classList.toggle('is-active', e.target.checked);
       this._refreshEvents();
+      // Re-render pour mettre à jour les compteurs/hints
+      this.refresh();
+    });
+
+    // Bouton reset filtres
+    view.querySelector('#planningResetFilters')?.addEventListener('click', () => {
+      this._filters = null;
+      this._initFilters();
+      this.refresh();
+      Toast.success('Filtres réinitialisés');
     });
   },
 
-  _syncGroupToggle(group) {
+  /** Met à jour les compteurs et les "Tout sélectionner" sans re-render complet */
+  _updateSidebar() {
     const view = $('#view');
     if (!view) return;
-    let allIds;
-    if (group === 'conducteurs') {
-      allIds = Store.state.conducteurs.map(c => c.id).concat('__none__');
-    } else {
-      allIds = Store.state.equipes.map(e => e.id);
-    }
-    const toggle = view.querySelector(`[data-toggle-group="${group}"]`);
-    if (toggle) toggle.checked = this._allChecked(group, allIds);
+
+    // Mise à jour master checkboxes
+    const condIds = Store.state.conducteurs.map(c => c.id).concat('__none__');
+    const eqIds = Store.state.equipes.map(e => e.id);
+    const condMaster = view.querySelector('[data-toggle-group="conducteurs"]');
+    if (condMaster) condMaster.checked = this._allChecked('conducteurs', condIds);
+    const eqMaster = view.querySelector('[data-toggle-group="equipes"]');
+    if (eqMaster) eqMaster.checked = this._allChecked('equipes', eqIds);
+
+    // Mise à jour des compteurs
+    const counts = view.querySelectorAll('.planning-filter-count');
+    if (counts[0]) counts[0].textContent = `${this._filters.conducteurs.size}/${condIds.length}`;
+    if (counts[1]) counts[1].textContent = `${this._filters.equipes.size}/${eqIds.length}`;
   },
 
   _refreshEvents() {
