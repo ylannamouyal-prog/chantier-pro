@@ -122,13 +122,41 @@ const Dashboard = {
     this._renderChartChantiers();
     this._renderChartStatuts();
 
-    // Refresh
+   // Refresh
     $('#dashRefresh')?.addEventListener('click', () => {
       Toast.info('Données actualisées');
       this.render(container);
     });
-  },
 
+    // Bascule Mois / Année
+    document.querySelectorAll('[data-chart-range]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-chart-range]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this._chartRange = btn.dataset.chartRange;
+        const yearSelect = document.getElementById('chartYearSelect');
+        if (yearSelect) yearSelect.style.display = this._chartRange === 'year' ? '' : 'none';
+        // Détruire l'ancien graph et recréer
+        this._charts.forEach(c => c.destroy());
+        this._charts = [];
+        this._renderChartChantiers();
+        this._renderChartStatuts();
+      });
+    });
+
+    // Changement d'année
+    document.getElementById('chartYearSelect')?.addEventListener('change', (e) => {
+      this._chartYear = parseInt(e.target.value);
+      this._charts.forEach(c => c.destroy());
+      this._charts = [];
+      this._renderChartChantiers();
+      this._renderChartStatuts();
+    });
+
+    // Afficher le sélecteur d'année si on est en mode année
+    const yearSelect = document.getElementById('chartYearSelect');
+    if (yearSelect && this._chartRange === 'year') yearSelect.style.display = '';
+  },
   _renderRecentChantier(c) {
     const statut = Helpers.computeStatus(c);
     const client = Store.getClient(c.clientId);
@@ -147,24 +175,57 @@ const Dashboard = {
     `;
   },
 
+  _chartRange: 'month',
+  _chartYear: new Date().getFullYear(),
+
+  _yearOptions() {
+    const years = new Set();
+    const currentYear = new Date().getFullYear();
+    // Années des chantiers existants
+    Store.state.chantiers.forEach(c => {
+      if (c.dateDebut) years.add(new Date(c.dateDebut).getFullYear());
+      if (c.dateFin) years.add(new Date(c.dateFin).getFullYear());
+    });
+    // Ajoute 2 années passées + 1 future au cas où
+    for (let y = currentYear - 2; y <= currentYear + 1; y++) years.add(y);
+    return [...years].sort((a, b) => b - a)
+      .map(y => `<option value="${y}" ${y === this._chartYear ? 'selected' : ''}>${y}</option>`)
+      .join('');
+  },
+
   _renderChartChantiers() {
     const ctx = $('#chartChantiers');
     if (!ctx) return;
 
-    // Données simulées sur 6 derniers mois
     const labels = [];
     const data = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date();
-      d.setMonth(d.getMonth() - i);
-      labels.push(d.toLocaleDateString('fr-FR', { month: 'short' }));
-      const month = d.getMonth();
-      const year = d.getFullYear();
-      data.push(Store.state.chantiers.filter(c => {
-        if (!c.dateDebut) return false;
-        const cd = new Date(c.dateDebut);
-        return cd.getMonth() === month && cd.getFullYear() === year;
-      }).length);
+
+    if (this._chartRange === 'year') {
+      // Mode ANNÉE : 12 mois de l'année sélectionnée
+      const year = this._chartYear;
+      for (let m = 0; m < 12; m++) {
+        const d = new Date(year, m, 1);
+        labels.push(d.toLocaleDateString('fr-FR', { month: 'short' }));
+        data.push(Store.state.chantiers.filter(c => {
+          if (!c.dateDebut) return false;
+          const cd = new Date(c.dateDebut);
+          return cd.getMonth() === m && cd.getFullYear() === year;
+        }).length);
+      }
+    } else {
+      // Mode MOIS : 6 derniers mois glissants
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        labels.push(d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }));
+        const month = d.getMonth();
+        const year = d.getFullYear();
+        data.push(Store.state.chantiers.filter(c => {
+          if (!c.dateDebut) return false;
+          const cd = new Date(c.dateDebut);
+          return cd.getMonth() === month && cd.getFullYear() === year;
+        }).length);
+      }
     }
 
     const isDark = document.documentElement.dataset.theme === 'dark';
