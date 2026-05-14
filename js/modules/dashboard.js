@@ -52,9 +52,14 @@ const Dashboard = {
         <div class="card">
           <div class="card__header">
             <div class="card__title">Activité des chantiers</div>
-            <div class="tabs">
-              <button class="tab active" data-chart-range="month">Mois</button>
-              <button class="tab" data-chart-range="year">Année</button>
+           <div class="chart-controls">
+              <div class="tabs">
+                <button class="tab active" data-chart-range="month">Mois</button>
+                <button class="tab" data-chart-range="year">Année</button>
+              </div>
+              <select id="chartYearSelect" class="form-select chart-year-select" style="display:none">
+                ${this._yearOptions()}
+              </select>
             </div>
           </div>
           <div class="card__body">
