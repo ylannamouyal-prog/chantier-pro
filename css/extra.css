@@ -1125,6 +1125,13 @@
   font-weight: 600;
   border-left-width: 4px !important;
 }
+.fc-event.planning-rdv {
+  border-radius: var(--r-md) !important;
+  font-weight: 500;
+  /* Bordure pointillée pour distinguer visuellement les RDV des chantiers */
+  border-style: dashed !important;
+  border-width: 2px !important;
+}
 .fc-event.planning-alerte {
   font-weight: 700;
   border-radius: var(--r-md) !important;
@@ -1160,6 +1167,44 @@
   .planning-filter-section__title {
     grid-column: 1 / -1;
   }
+}
+
+/* Détail RDV - champs copiables */
+.rdv-detail-header {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-3);
+}
+.copyable-field {
+  display: flex !important;
+  align-items: center;
+  gap: var(--s-2);
+}
+.copyable-field > span,
+.copyable-field > a {
+  flex: 1;
+}
+.btn-icon--copy {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all var(--t-fast);
+  flex-shrink: 0;
+}
+.btn-icon--copy:hover {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+  transform: scale(1.05);
 }
 
 /* ========== RESPONSIVE ========== */
