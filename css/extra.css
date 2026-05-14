@@ -764,7 +764,18 @@
   color: var(--txt-muted);
   font-size: var(--fs-md);
 }
-
+/* ========== CHART CONTROLS ========== */
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.chart-year-select {
+  height: 32px;
+  padding: 0 var(--s-2);
+  font-size: var(--fs-sm);
+  min-width: 90px;
+}
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
   .form-grid { grid-template-columns: 1fr; }
