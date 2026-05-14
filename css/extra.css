@@ -764,18 +764,168 @@
   color: var(--txt-muted);
   font-size: var(--fs-md);
 }
-/* ========== CHART CONTROLS ========== */
-.chart-controls {
+
+/* ========== COMMANDES ========== */
+.commandes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: var(--s-4);
+}
+.commande-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+  cursor: pointer;
+  transition: all var(--t-base);
+  border-left: 4px solid #f59e0b;
+}
+.commande-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+.commande-card--passee { border-left-color: #3b82f6; }
+.commande-card--livree { border-left-color: #10b981; opacity: 0.85; }
+.commande-card--annulee { border-left-color: #ef4444; opacity: 0.6; }
+
+.commande-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.commande-num {
+  font-size: var(--fs-sm);
+  color: var(--txt-muted);
+  font-weight: 600;
+}
+.commande-fournisseur {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.commande-card__motif {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-3);
+}
+.motif-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.motif-tag--chantier {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+.motif-tag--reappro {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+[data-theme="dark"] .motif-tag--chantier { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+[data-theme="dark"] .motif-tag--reappro { background: rgba(245, 158, 11, 0.15); color: #fcd34d; }
+
+.commande-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px var(--s-3);
+  font-size: var(--fs-sm);
+}
+.commande-meta strong {
+  color: var(--txt-secondary);
+  font-weight: 500;
+}
+.commande-detail-header {
+  display: flex;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+
+/* Form lignes de commande */
+.lignes-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-top: var(--s-1);
+}
+.ligne-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1.5fr 80px 70px 100px 90px 32px;
+  gap: var(--s-2);
+  align-items: center;
+  padding: var(--s-2);
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+}
+.ligne-row .form-input,
+.ligne-row .form-select {
+  height: 36px;
+  font-size: var(--fs-sm);
+}
+.ligne-total {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: #3b82f6;
+  text-align: right;
+}
+.lignes-total {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-md);
+}
+.lignes-total span {
+  font-size: var(--fs-lg);
+  color: #3b82f6;
+  font-weight: 700;
+}
+
+/* Suggestions auto */
+.suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.suggestion-card {
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+}
+.suggestion-header {
   display: flex;
   align-items: center;
   gap: var(--s-3);
+  cursor: pointer;
+  margin-bottom: var(--s-2);
 }
-.chart-year-select {
-  height: 32px;
-  padding: 0 var(--s-2);
-  font-size: var(--fs-sm);
-  min-width: 90px;
+.suggestion-header > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
+.suggestion-header strong { font-size: var(--fs-md); }
+.suggestion-check {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+.table--compact th, .table--compact td {
+  padding: 4px 8px;
+  font-size: var(--fs-xs);
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
   .form-grid { grid-template-columns: 1fr; }
