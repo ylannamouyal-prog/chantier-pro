@@ -21,6 +21,7 @@ const Store = {
     commandes:    [],       // bons de commande fournisseurs
     equipes:      [],       // équipes avec couleur
     conducteurs:  [],       // conducteurs avec couleur
+    rendezVous:   [],       // rendez-vous (métré, visite, livraison...)
     parametres: {
       entreprise: {
         nom: 'Menuiserie SAS',
@@ -571,6 +572,54 @@ const Store = {
   },
 
   // ============================================================
+  // RENDEZ-VOUS
+  // ============================================================
+  /**
+   * Un rendez-vous = {
+   *   id, titre, type ('metre'|'visite'|'devis'|'livraison'|'autre'),
+   *   date (YYYY-MM-DD), heureDebut (HH:MM), heureFin (HH:MM),
+   *   conducteurId, clientId (optionnel), adresse, telephone, notes,
+   *   createdAt, updatedAt
+   * }
+   */
+  addRdv(data) {
+    const r = {
+      id: Helpers.uid('rdv_'),
+      titre: '',
+      type: 'visite',
+      date: new Date().toISOString().split('T')[0],
+      heureDebut: '09:00',
+      heureFin: '10:00',
+      conducteurId: null,
+      clientId: null,
+      adresse: '',
+      telephone: '',
+      notes: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...data
+    };
+    this.commit('rdv:add', s => s.rendezVous.push(r));
+    return r;
+  },
+
+  updateRdv(id, patch) {
+    this.commit('rdv:update', s => {
+      const r = s.rendezVous.find(x => x.id === id);
+      if (r) {
+        Object.assign(r, patch);
+        r.updatedAt = new Date().toISOString();
+      }
+    });
+  },
+
+  deleteRdv(id) {
+    this.commit('rdv:delete', s => {
+      s.rendezVous = s.rendezVous.filter(r => r.id !== id);
+    });
+  },
+
+  // ============================================================
   // SAUVEGARDE / RESTAURATION
   // ============================================================
   exportJSON() {
@@ -596,7 +645,7 @@ const Store = {
       chantiers: [], clients: [], cotes: [], fournitures: [],
       stockAtelier: {}, stockCamions: {}, reservations: [], mouvements: [],
       engins: [], reservationsEngins: [], fournisseurs: [], commandes: [],
-      equipes: [], conducteurs: [],
+      equipes: [], conducteurs: [], rendezVous: [],
       parametres: { entreprise: { nom: 'Menuiserie SAS' }, theme: 'light' }
     };
     this._notify('store:reset', this.state);
