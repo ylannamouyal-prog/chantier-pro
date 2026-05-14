@@ -18,6 +18,7 @@ const Store = {
     engins:       [],       // engins/nacelles
     reservationsEngins: [], // { id, enginId, chantierId, dateDebut, dateFin }
     fournisseurs: [],
+    commandes:    [],       // bons de commande fournisseurs
     equipes:      [],       // équipes avec couleur
     conducteurs:  [],       // conducteurs avec couleur
     parametres: {
@@ -359,6 +360,164 @@ const Store = {
   },
 
   // ============================================================
+  // COMMANDES (bons de commande fournisseurs)
+  // ============================================================
+  /**
+   * Une commande = {
+   *   id, numero, dateCommande, dateLivraisonPrevue,
+   *   fournisseurId, chantierId (optionnel), conducteurId (optionnel),
+   *   lignes: [{ fournitureId, designation, quantite, prixUnitaire, unite }],
+   *   statut: 'a-passer' | 'passee' | 'livree' | 'annulee',
+   *   motif: 'chantier' | 'reappro',
+   *   notes,
+   *   createdAt, updatedAt, livreeAt
+   * }
+   */
+  addCommande(data) {
+    const num = this._nextCommandeNumber();
+    const c = {
+      id: Helpers.uid('cmd_'),
+      numero: num,
+      dateCommande: new Date().toISOString().split('T')[0],
+      dateLivraisonPrevue: '',
+      fournisseurId: '',
+      chantierId: null,
+      conducteurId: null,
+      lignes: [],
+      statut: 'a-passer',
+      motif: 'reappro',
+      notes: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      livreeAt: null,
+      ...data
+    };
+    this.commit('commande:add', s => s.commandes.push(c));
+    return c;
+  },
+
+  updateCommande(id, patch) {
+    this.commit('commande:update', s => {
+      const c = s.commandes.find(x => x.id === id);
+      if (c) {
+        Object.assign(c, patch);
+        c.updatedAt = new Date().toISOString();
+      }
+    });
+  },
+
+  deleteCommande(id) {
+    this.commit('commande:delete', s => {
+      s.commandes = s.commandes.filter(c => c.id !== id);
+    });
+  },
+
+  /** Marquer une commande comme livrée → injecte les quantités dans le stock atelier */
+  markCommandeLivree(id) {
+    this.commit('commande:livree', s => {
+      const c = s.commandes.find(x => x.id === id);
+      if (!c) return;
+      c.statut = 'livree';
+      c.livreeAt = new Date().toISOString();
+      c.updatedAt = new Date().toISOString();
+      // Injection automatique dans le stock atelier
+      (c.lignes || []).forEach(ligne => {
+        if (!ligne.fournitureId || !ligne.quantite) return;
+        const current = s.stockAtelier[ligne.fournitureId] || 0;
+        s.stockAtelier[ligne.fournitureId] = current + Number(ligne.quantite);
+        // Trace dans l'historique des mouvements
+        if (!s.mouvements) s.mouvements = [];
+        s.mouvements.push({
+          id: Helpers.uid('mv_'),
+          fournitureId: ligne.fournitureId,
+          type: 'entree',
+          quantite: Number(ligne.quantite),
+          emplacement: 'atelier',
+          motif: `Livraison commande ${c.numero}`,
+          date: new Date().toISOString()
+        });
+      });
+    });
+  },
+
+  _nextCommandeNumber() {
+    const year = new Date().getFullYear();
+    const prefix = `CMD-${year}-`;
+    const existing = this.state.commandes
+      .filter(c => c.numero && c.numero.startsWith(prefix))
+      .map(c => parseInt(c.numero.replace(prefix, ''), 10))
+      .filter(n => !isNaN(n));
+    const next = existing.length ? Math.max(...existing) + 1 : 1;
+    return prefix + String(next).padStart(4, '0');
+  },
+
+  /** Suggère des commandes auto basées sur les seuils d'alerte et délais fournisseur */
+  suggestCommandes() {
+    const suggestions = [];
+    const byFournisseur = new Map();
+
+    this.state.fournitures.forEach(f => {
+      const total = (this.state.stockAtelier[f.id] || 0) +
+        Object.values(this.state.stockCamions || {})
+          .reduce((s, c) => s + (c[f.id] || 0), 0);
+      if (total > (f.seuilAlerte || 0)) return;
+
+      // Trouver le meilleur fournisseur pour cette fourniture
+      // (par défaut : le 1er qui a la même catégorie, sinon n'importe lequel)
+      const candidats = this.state.fournisseurs.filter(fr =>
+        !fr.categorie || !f.categorie || fr.categorie === f.categorie
+      );
+      const fournisseur = candidats[0] || this.state.fournisseurs[0];
+      if (!fournisseur) return;
+
+      const aCommander = Math.max((f.seuilAlerte || 5) * 3 - total, (f.seuilAlerte || 5));
+
+      if (!byFournisseur.has(fournisseur.id)) {
+        byFournisseur.set(fournisseur.id, {
+          fournisseurId: fournisseur.id,
+          fournisseurNom: fournisseur.nom,
+          delaiLivraison: fournisseur.delaiLivraison || 5,
+          lignes: []
+        });
+      }
+      byFournisseur.get(fournisseur.id).lignes.push({
+        fournitureId: f.id,
+        designation: f.nom,
+        quantite: aCommander,
+        prixUnitaire: f.prixUnitaire || 0,
+        unite: f.unite || 'pcs'
+      });
+    });
+
+    // Date de commande suggérée : aujourd'hui ; livraison = aujourd'hui + délai
+    const today = new Date();
+    byFournisseur.forEach(s => {
+      const livraison = new Date(today);
+      livraison.setDate(livraison.getDate() + s.delaiLivraison);
+      suggestions.push({
+        ...s,
+        dateCommande: today.toISOString().split('T')[0],
+        dateLivraisonPrevue: livraison.toISOString().split('T')[0],
+        motif: 'reappro',
+        montantEstime: s.lignes.reduce((sum, l) => sum + (l.quantite * l.prixUnitaire), 0)
+      });
+    });
+
+    return suggestions;
+  },
+
+  /** Récupère les commandes dans une plage de dates pour le planning */
+  getCommandesByPeriod(start, end) {
+    const s = new Date(start);
+    const e = new Date(end);
+    return this.state.commandes.filter(c => {
+      if (!c.dateCommande) return false;
+      const d = new Date(c.dateCommande);
+      return d >= s && d <= e;
+    });
+  },
+
+  // ============================================================
   // EQUIPES / CONDUCTEURS
   // ============================================================
   addEquipe(data) {
@@ -436,7 +595,7 @@ const Store = {
     this.state = {
       chantiers: [], clients: [], cotes: [], fournitures: [],
       stockAtelier: {}, stockCamions: {}, reservations: [], mouvements: [],
-      engins: [], reservationsEngins: [], fournisseurs: [],
+      engins: [], reservationsEngins: [], fournisseurs: [], commandes: [],
       equipes: [], conducteurs: [],
       parametres: { entreprise: { nom: 'Menuiserie SAS' }, theme: 'light' }
     };
