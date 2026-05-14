@@ -13,6 +13,9 @@ const Planning = {
     this._filters = {
       conducteurs: new Set(Store.state.conducteurs.map(c => c.id)),
       equipes: new Set(Store.state.equipes.map(e => e.id)),
+      // Nouveau : types d'événements (chantiers et RDV activés par défaut)
+      chantiers: true,
+      rendezVous: true,
       commandes: false
     };
     this._filters.conducteurs.add('__none__');
@@ -42,6 +45,7 @@ const Planning = {
         subtitle: 'Vue d\'ensemble de l\'activité — drag & drop pour replanifier',
         actions: `
           <button class="btn btn--secondary" id="planningExportPdf"><span class="btn-icon">⤓</span> PDF planning</button>
+          <button class="btn btn--ghost" id="planningNewRdvBtn"><span class="btn-icon">📅</span> Nouveau RDV</button>
           <button class="btn btn--primary" id="planningNewBtn"><span class="btn-icon">+</span> Nouveau chantier</button>
         `
       })}
@@ -80,6 +84,22 @@ const Planning = {
               <input type="checkbox" data-filter-cond="__none__" ${this._filters.conducteurs.has('__none__') ? 'checked' : ''}>
               <span class="filter-row__color filter-row__color--empty"></span>
               <span class="filter-row__label">Sans conducteur</span>
+            </label>
+          </div>
+
+          <div class="planning-filter-section">
+            <div class="planning-filter-section__title">
+              <span>📌 Type d'événement</span>
+            </div>
+            <label class="filter-row">
+              <input type="checkbox" data-filter-type="chantiers" ${this._filters.chantiers ? 'checked' : ''}>
+              <span class="filter-row__icon">🏗️</span>
+              <span class="filter-row__label">Chantiers</span>
+            </label>
+            <label class="filter-row">
+              <input type="checkbox" data-filter-type="rendezVous" ${this._filters.rendezVous ? 'checked' : ''}>
+              <span class="filter-row__icon">📅</span>
+              <span class="filter-row__label">Rendez-vous</span>
             </label>
           </div>
 
@@ -129,6 +149,7 @@ const Planning = {
     this._bindFilters();
 
     $('#planningNewBtn').addEventListener('click', () => Chantiers.openCreate());
+    $('#planningNewRdvBtn')?.addEventListener('click', () => window.RendezVous?.openForm?.());
     $('#planningExportPdf').addEventListener('click', () => PdfExport.planning());
   },
 
@@ -181,12 +202,16 @@ const Planning = {
         if (type === 'commande') {
           const id = info.event.extendedProps.commandeId;
           if (id && window.Commandes) {
-            // Ouvre le formulaire d'édition (qui sert aussi de détail)
             window.Commandes.openForm(id);
           }
         } else if (type === 'alerte-stock') {
           const fournitureId = info.event.extendedProps.fournitureId;
           this._openCreateCommandeForAlerte(fournitureId);
+        } else if (type === 'rdv') {
+          const rdvId = info.event.extendedProps.rdvId;
+          if (rdvId && window.RendezVous) {
+            window.RendezVous.openDetail(rdvId);
+          }
         } else {
           const chantierId = info.event.extendedProps.chantierId;
           if (chantierId) Chantiers.openDetail(chantierId);
@@ -194,6 +219,15 @@ const Planning = {
       },
       eventDrop: (info) => {
         const type = info.event.extendedProps.type;
+        if (type === 'rdv') {
+          const rdvId = info.event.extendedProps.rdvId;
+          const newDate = info.event.start;
+          Store.updateRdv(rdvId, {
+            date: Format.dateISO(newDate)
+          });
+          Toast.success('Rendez-vous déplacé');
+          return;
+        }
         if (type !== 'chantier' && !info.event.extendedProps.chantierId) {
           info.revert();
           return;
@@ -244,6 +278,21 @@ const Planning = {
             const total = Store.getStockTotal(f.id).total;
             info.el.title = `⚠️ ALERTE STOCK\n${f.nom}\nStock actuel : ${total} ${f.unite}\nSeuil : ${f.seuilAlerte}\n\nCliquer pour créer une commande`;
           }
+        } else if (type === 'rdv') {
+          const r = Store.state.rendezVous.find(x => x.id === info.event.extendedProps.rdvId);
+          if (r) {
+            const cond = Store.state.conducteurs.find(c => c.id === r.conducteurId);
+            const tInfo = window.RendezVous?.typeInfo?.(r.type) || { label: r.type, icon: '📅' };
+            const lines = [
+              `${tInfo.icon} ${r.titre}`,
+              `Type : ${tInfo.label}`,
+              `Horaires : ${r.heureDebut} → ${r.heureFin}`,
+              cond ? `Conducteur : ${cond.nom}` : '',
+              r.adresse ? `Adresse : ${r.adresse}` : '',
+              r.telephone ? `Tél : ${r.telephone}` : ''
+            ].filter(Boolean);
+            info.el.title = lines.join('\n');
+          }
         } else {
           const c = Store.getChantier(info.event.extendedProps.chantierId);
           if (c) {
@@ -263,32 +312,60 @@ const Planning = {
   _buildEvents() {
     const events = [];
 
-    // 1) CHANTIERS
-    Store.state.chantiers
-      .filter(c => c.dateDebut && c.dateFin)
-      .filter(c => {
-        const condId = c.conducteurId || '__none__';
-        if (!this._filters.conducteurs.has(condId)) return false;
-        if (c.equipeId && !this._filters.equipes.has(c.equipeId)) return false;
-        return true;
-      })
-      .forEach(c => {
-        const cond = Store.state.conducteurs.find(x => x.id === c.conducteurId);
-        const color = cond?.couleur || Helpers.statusColor(Helpers.computeStatus(c));
-        const endDate = new Date(c.dateFin);
-        endDate.setDate(endDate.getDate() + 1);
-        events.push({
-          id: c.id,
-          title: `${c.numero} · ${c.titre}`,
-          start: c.dateDebut,
-          end: endDate.toISOString().split('T')[0],
-          backgroundColor: color,
-          borderColor: color,
-          extendedProps: { chantierId: c.id, type: 'chantier' }
+    // 1) CHANTIERS (si filtre activé)
+    if (this._filters.chantiers) {
+      Store.state.chantiers
+        .filter(c => c.dateDebut && c.dateFin)
+        .filter(c => {
+          const condId = c.conducteurId || '__none__';
+          if (!this._filters.conducteurs.has(condId)) return false;
+          if (c.equipeId && !this._filters.equipes.has(c.equipeId)) return false;
+          return true;
+        })
+        .forEach(c => {
+          const cond = Store.state.conducteurs.find(x => x.id === c.conducteurId);
+          const color = cond?.couleur || Helpers.statusColor(Helpers.computeStatus(c));
+          const endDate = new Date(c.dateFin);
+          endDate.setDate(endDate.getDate() + 1);
+          events.push({
+            id: c.id,
+            title: `${c.numero} · ${c.titre}`,
+            start: c.dateDebut,
+            end: endDate.toISOString().split('T')[0],
+            backgroundColor: color,
+            borderColor: color,
+            extendedProps: { chantierId: c.id, type: 'chantier' }
+          });
         });
-      });
+    }
 
-    // 2) COMMANDES (si filtre activé)
+    // 2) RENDEZ-VOUS (si filtre activé)
+    if (this._filters.rendezVous) {
+      (Store.state.rendezVous || [])
+        .filter(r => {
+          const condId = r.conducteurId || '__none__';
+          return this._filters.conducteurs.has(condId);
+        })
+        .forEach(r => {
+          const cond = Store.state.conducteurs.find(c => c.id === r.conducteurId);
+          const color = cond?.couleur || '#6366f1';
+          const tInfo = window.RendezVous?.typeInfo?.(r.type) || { icon: '📅' };
+          const start = `${r.date}T${r.heureDebut || '09:00'}:00`;
+          const end = `${r.date}T${r.heureFin || '10:00'}:00`;
+          events.push({
+            id: 'rdv_' + r.id,
+            title: `${tInfo.icon} ${r.titre}`,
+            start: start,
+            end: end,
+            backgroundColor: color,
+            borderColor: color,
+            extendedProps: { rdvId: r.id, type: 'rdv' },
+            classNames: ['planning-rdv']
+          });
+        });
+    }
+
+    // 3) COMMANDES (si filtre activé)
     if (this._filters.commandes) {
       (Store.state.commandes || []).forEach(c => {
         if (!c.dateCommande || c.statut === 'annulee') return;
@@ -310,7 +387,7 @@ const Planning = {
         });
       });
 
-      // 3) ALERTES STOCK
+      // 4) ALERTES STOCK
       const today = new Date().toISOString().split('T')[0];
       const alertes = this._getAlertesStock();
       alertes.forEach(f => {
@@ -422,6 +499,15 @@ const Planning = {
       this._refreshEvents();
       // Re-render pour mettre à jour les compteurs/hints
       this.refresh();
+    });
+
+    // Cases Type d'événement (chantiers / rendez-vous)
+    view.querySelectorAll('[data-filter-type]').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        const t = e.target.dataset.filterType;
+        this._filters[t] = e.target.checked;
+        this._refreshEvents();
+      });
     });
 
     // Bouton reset filtres
