@@ -1207,6 +1207,166 @@
   transform: scale(1.05);
 }
 
+/* ========== RENDEZ-VOUS ========== */
+.fc-event.planning-rdv {
+  font-weight: 600;
+  border-radius: var(--r-md) !important;
+  border-style: dashed !important;
+  border-width: 2px !important;
+}
+.fc-event.planning-rdv .fc-event-time,
+.fc-event.planning-rdv .fc-event-title {
+  font-weight: 600;
+}
+
+.rdv-detail-header {
+  display: flex;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+  flex-wrap: wrap;
+}
+.rdv-conducteur-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 12px;
+  border-radius: var(--r-full);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+/* Icônes de copie & actions inline */
+.copy-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.copy-line > span {
+  flex: 1;
+  min-width: 0;
+}
+.btn-icon--copy {
+  font-size: 14px;
+  transition: all var(--t-fast);
+}
+.btn-icon--copy:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+  color: #3b82f6;
+  transform: scale(1.05);
+}
+.btn-icon--copied {
+  background: #10b981 !important;
+  color: white !important;
+  border-color: #10b981 !important;
+}
+a.btn-icon {
+  text-decoration: none;
+}
+a.btn-icon:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+/* ========== MODELES DE CHANTIER ========== */
+.modeles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--s-4);
+}
+.modele-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+  cursor: pointer;
+  transition: all var(--t-base);
+  border-left: 4px solid #8b5cf6;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.modele-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+.modele-card__header h3 {
+  margin: 0 0 var(--s-1);
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: var(--fs-lg);
+}
+.modele-card__desc {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--txt-secondary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.modele-card__stats {
+  display: flex;
+  gap: var(--s-3);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--border-subtle);
+}
+.modele-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 12px;
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+  min-width: 70px;
+}
+.modele-stat strong {
+  font-size: var(--fs-lg);
+  font-family: 'Bricolage Grotesque', sans-serif;
+}
+.modele-stat span {
+  font-size: var(--fs-xs);
+  color: var(--txt-muted);
+}
+.modele-stat--m2 { background: rgba(59, 130, 246, 0.1); }
+.modele-stat--m2 strong { color: #3b82f6; }
+.modele-stat--fixe { background: rgba(139, 92, 246, 0.1); }
+.modele-stat--fixe strong { color: #8b5cf6; }
+.modele-card__actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  margin-top: auto;
+}
+
+/* Formulaire modèle - lignes */
+.modele-lignes-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-top: var(--s-1);
+}
+.modele-ligne-row {
+  display: grid;
+  grid-template-columns: 2fr 90px 50px 130px 32px;
+  gap: var(--s-2);
+  align-items: center;
+  padding: var(--s-2);
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+}
+.modele-ligne-row .form-input,
+.modele-ligne-row .form-select {
+  height: 36px;
+  font-size: var(--fs-sm);
+}
+.modele-ligne-row .ligne-unite {
+  color: var(--txt-muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
   .form-grid { grid-template-columns: 1fr; }
