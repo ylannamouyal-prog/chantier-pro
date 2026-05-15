@@ -10,6 +10,7 @@
     '/clients': { module: 'Clients', title: 'Clients', nav: 'clients' },
     '/stocks': { module: 'Stocks', title: 'Stocks', nav: 'stocks' },
     '/engins': { module: 'Engins', title: 'Engins', nav: 'engins' },
+    '/modeles': { module: 'Modeles', title: 'Modèles de chantier', nav: 'modeles' },
     '/fournisseurs': { module: 'Fournisseurs', title: 'Fournisseurs', nav: 'fournisseurs' },
     '/commandes': { module: 'Commandes', title: 'Commandes', nav: 'commandes' },
     '/equipes': { module: 'Equipes', title: 'Équipes', nav: 'equipes' },
@@ -130,6 +131,7 @@
           const action = item.dataset.action;
           switch (action) {
             case 'new-chantier': window.Chantiers?.openCreate?.(); break;
+            case 'new-rdv': window.RendezVous?.openForm?.(); break;
             case 'new-client': window.Clients?.openCreate?.(); break;
             case 'new-cote': Router.navigate('/chantiers'); Toast.info('Sélectionnez un chantier pour ses cotes'); break;
             case 'new-fourniture': Router.navigate('/stocks'); break;
