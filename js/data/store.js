@@ -19,6 +19,8 @@ const Store = {
     reservationsEngins: [], // { id, enginId, chantierId, dateDebut, dateFin }
     fournisseurs: [],
     commandes:    [],       // bons de commande fournisseurs
+    rdvs:         [],       // rendez-vous (visites, métrés, etc.)
+    modeles:      [],       // modèles de chantier (bibliothèque de fournitures par type)
     equipes:      [],       // équipes avec couleur
     conducteurs:  [],       // conducteurs avec couleur
     rendezVous:   [],       // rendez-vous (métré, visite, livraison...)
@@ -519,6 +521,60 @@ const Store = {
   },
 
   // ============================================================
+  // RENDEZ-VOUS (rdvs)
+  // ============================================================
+  /**
+   * Un rendez-vous = {
+   *   id, titre, date, heureDebut, heureFin,
+   *   conducteurId, clientId, adresse, telephone,
+   *   type: 'metre'|'visite'|'devis'|'livraison'|'autre',
+   *   notes,
+   *   createdAt, updatedAt
+   * }
+   */
+  addRdv(data) {
+    const r = {
+      id: Helpers.uid('rdv_'),
+      titre: '',
+      date: new Date().toISOString().split('T')[0],
+      heureDebut: '09:00',
+      heureFin: '10:00',
+      conducteurId: null,
+      clientId: null,
+      adresse: '',
+      telephone: '',
+      type: 'visite',
+      notes: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...data
+    };
+    this.commit('rdv:add', s => {
+      if (!s.rdvs) s.rdvs = [];
+      s.rdvs.push(r);
+    });
+    return r;
+  },
+
+  updateRdv(id, patch) {
+    this.commit('rdv:update', s => {
+      if (!s.rdvs) return;
+      const r = s.rdvs.find(x => x.id === id);
+      if (r) {
+        Object.assign(r, patch);
+        r.updatedAt = new Date().toISOString();
+      }
+    });
+  },
+
+  deleteRdv(id) {
+    this.commit('rdv:delete', s => {
+      if (!s.rdvs) return;
+      s.rdvs = s.rdvs.filter(r => r.id !== id);
+    });
+  },
+
+  // ============================================================
   // EQUIPES / CONDUCTEURS
   // ============================================================
   addEquipe(data) {
@@ -572,50 +628,60 @@ const Store = {
   },
 
   // ============================================================
-  // RENDEZ-VOUS
+  // MODELES DE CHANTIER (bibliothèque de fournitures par type)
   // ============================================================
   /**
-   * Un rendez-vous = {
-   *   id, titre, type ('metre'|'visite'|'devis'|'livraison'|'autre'),
-   *   date (YYYY-MM-DD), heureDebut (HH:MM), heureFin (HH:MM),
-   *   conducteurId, clientId (optionnel), adresse, telephone, notes,
+   * Un modèle = {
+   *   id, nom, description, categorie,
+   *   lignes: [{ fournitureId, designation, quantite, mode ('m2'|'fixe'), unite }],
    *   createdAt, updatedAt
    * }
    */
-  addRdv(data) {
-    const r = {
-      id: Helpers.uid('rdv_'),
-      titre: '',
-      type: 'visite',
-      date: new Date().toISOString().split('T')[0],
-      heureDebut: '09:00',
-      heureFin: '10:00',
-      conducteurId: null,
-      clientId: null,
-      adresse: '',
-      telephone: '',
-      notes: '',
+  addModele(data) {
+    const m = {
+      id: Helpers.uid('mod_'),
+      nom: '',
+      description: '',
+      categorie: '',
+      lignes: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...data
     };
-    this.commit('rdv:add', s => s.rendezVous.push(r));
-    return r;
+    this.commit('modele:add', s => {
+      if (!s.modeles) s.modeles = [];
+      s.modeles.push(m);
+    });
+    return m;
   },
 
-  updateRdv(id, patch) {
-    this.commit('rdv:update', s => {
-      const r = s.rendezVous.find(x => x.id === id);
-      if (r) {
-        Object.assign(r, patch);
-        r.updatedAt = new Date().toISOString();
+  updateModele(id, patch) {
+    this.commit('modele:update', s => {
+      if (!s.modeles) return;
+      const m = s.modeles.find(x => x.id === id);
+      if (m) {
+        Object.assign(m, patch);
+        m.updatedAt = new Date().toISOString();
       }
     });
   },
 
-  deleteRdv(id) {
-    this.commit('rdv:delete', s => {
-      s.rendezVous = s.rendezVous.filter(r => r.id !== id);
+  deleteModele(id) {
+    this.commit('modele:delete', s => {
+      if (!s.modeles) return;
+      s.modeles = s.modeles.filter(m => m.id !== id);
+    });
+  },
+
+  duplicateModele(id) {
+    const orig = this.state.modeles?.find(m => m.id === id);
+    if (!orig) return null;
+    return this.addModele({
+      ...orig,
+      id: undefined,
+      nom: orig.nom + ' (copie)',
+      createdAt: undefined,
+      updatedAt: undefined
     });
   },
 
@@ -644,8 +710,8 @@ const Store = {
     this.state = {
       chantiers: [], clients: [], cotes: [], fournitures: [],
       stockAtelier: {}, stockCamions: {}, reservations: [], mouvements: [],
-      engins: [], reservationsEngins: [], fournisseurs: [], commandes: [],
-      equipes: [], conducteurs: [], rendezVous: [],
+      engins: [], reservationsEngins: [], fournisseurs: [], commandes: [], rdvs: [],
+      modeles: [], equipes: [], conducteurs: [], rendezVous: [],
       parametres: { entreprise: { nom: 'Menuiserie SAS' }, theme: 'light' }
     };
     this._notify('store:reset', this.state);
