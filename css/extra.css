@@ -1367,6 +1367,78 @@ a.btn-icon:hover {
   text-align: center;
 }
 
+/* ========== SELECTION CHANTIER (cotes picker) ========== */
+.chantiers-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--s-4);
+}
+.chantier-picker-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+  cursor: pointer;
+  transition: all var(--t-base);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  border-left: 4px solid #3b82f6;
+}
+.chantier-picker-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+  border-left-color: #2563eb;
+}
+.chantier-picker-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2);
+}
+.chantier-picker-card__num {
+  font-size: var(--fs-xs);
+  color: var(--txt-muted);
+  font-weight: 600;
+}
+.chantier-picker-card__title {
+  margin: 0;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--txt-primary);
+}
+.chantier-picker-card__client,
+.chantier-picker-card__addr {
+  font-size: var(--fs-sm);
+  color: var(--txt-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chantier-picker-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--s-2);
+  margin-top: auto;
+  border-top: 1px solid var(--border-subtle);
+}
+.chantier-picker-card__cotes {
+  font-size: var(--fs-sm);
+  color: var(--txt-secondary);
+}
+.chantier-picker-card__cotes strong {
+  color: #3b82f6;
+  font-size: var(--fs-base);
+}
+.chantier-picker-card__action {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: #3b82f6;
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
   .form-grid { grid-template-columns: 1fr; }
