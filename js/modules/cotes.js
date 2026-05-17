@@ -1,18 +1,18 @@
-// Module Cotes - prises de cotes par chantier
+// Module Cotes - prises de cotes par chantier, organisées en catégories d'ouvrages
 window.Cotes = (function () {
   let currentChantierId = null;
-  let sortableInstance = null;
   let listSearchQuery = '';
+  let expandedCategories = new Set();
+  let sortableInstances = [];
 
+  // ============================================================
+  // ENTRY POINT
+  // ============================================================
   function render(container, chantierId) {
     currentChantierId = chantierId;
 
-    // CAS 1 : aucun chantier en paramètre → vue de sélection
-    if (!chantierId) {
-      return renderChantierPicker(container);
-    }
+    if (!chantierId) return renderChantierPicker(container);
 
-    // CAS 2 : chantier introuvable → retour à la liste
     const chantier = Store.state.chantiers.find(c => c.id === chantierId);
     if (!chantier) {
       container.innerHTML = UI.emptyState({
@@ -23,11 +23,12 @@ window.Cotes = (function () {
       });
       return;
     }
-
-    // CAS 3 : chantier valide → affichage normal des cotes
-    renderCotesForChantier(container, chantier);
+    renderCategoriesForChantier(container, chantier);
   }
 
+  // ============================================================
+  // VUE 1 - SELECTION DU CHANTIER
+  // ============================================================
   function renderChantierPicker(container) {
     const chantiers = filterChantiers(Store.state.chantiers);
 
@@ -108,80 +109,302 @@ window.Cotes = (function () {
     `;
   }
 
-  function renderCotesForChantier(container, chantier) {
-    const chantierId = chantier.id;
-    const cotes = Store.getCotesByChantier(chantierId);
+  // ============================================================
+  // VUE 2 - CATÉGORIES D'UN CHANTIER
+  // ============================================================
+  function renderCategoriesForChantier(container, chantier) {
+    sortableInstances.forEach(s => s.destroy());
+    sortableInstances = [];
+
+    const categories = Store.getCategoriesByChantier(chantier.id);
+    const allCotes = Store.getCotesByChantier(chantier.id);
+    const totalSurface = allCotes.reduce(
+      (s, c) => s + ((c.largeur || 0) * (c.hauteur || 0) * (c.quantite || 1)) / 1000000, 0
+    );
 
     container.innerHTML = `
       <div class="view-header">
         <div>
           <div class="breadcrumb">
-            <a href="#/chantiers">Chantiers</a> /
-            <a href="#/chantiers/${chantier.id}">${Helpers.esc(chantier.numero)}</a> /
-            <span>Prises de cotes</span>
+            <a href="#/cotes">Prises de cotes</a> /
+            <span>${Helpers.esc(chantier.numero || '')}</span>
           </div>
-          <h1 class="view-title">📐 ${Helpers.esc(chantier.titre)}</h1>
-          <p class="view-subtitle">Mesures en mm — surfaces calculées automatiquement en m²</p>
+          <h1 class="view-title">📐 ${Helpers.esc(chantier.titre || 'Sans titre')}</h1>
+          <p class="view-subtitle">
+            ${categories.length} catégorie${categories.length > 1 ? 's' : ''} •
+            ${allCotes.length} cote${allCotes.length > 1 ? 's' : ''} •
+            ${totalSurface.toFixed(2)} m² au total
+          </p>
         </div>
         <div class="view-header__actions">
-          <button class="btn btn--ghost" id="cotesBibliotheque">📚 Bibliothèque ouvrages</button>
-          <button class="btn btn--primary" id="cotesAdd">+ Nouvelle cote</button>
+          <button class="btn btn--primary" id="cotesAddCategory">+ Nouvelle catégorie</button>
         </div>
       </div>
 
-      <div class="cotes-wrap">
-        <div class="cote-header-row">
-          <div class="cote-handle-h"></div>
-          <div>N°</div>
-          <div>Emplacement</div>
-          <div>Dimensions (L × H mm)</div>
-          <div>Surface</div>
-          <div>Type / Ouvrage</div>
-          <div></div>
+      ${categories.length === 0 ? UI.emptyState({
+        icon: '📦',
+        title: 'Aucune catégorie d\'ouvrage',
+        message: 'Créez une catégorie (ex: "Vitrage", "Menuiserie") pour commencer à saisir vos cotes regroupées par type d\'ouvrage.',
+        action: '<button class="btn btn--primary" onclick="Cotes._addCategory()">+ Créer une catégorie</button>'
+      }) : `
+        <div class="categories-cotes-list" id="categoriesCotesList">
+          ${categories.map(cat => renderCategoryCard(cat)).join('')}
         </div>
-        <div class="cotes-list" id="cotesList">
-          ${cotes.length === 0 ? UI.emptyState({
-            icon: '📏', title: 'Aucune cote enregistrée',
-            message: 'Commencez par ajouter une prise de cote.',
-            action: '<button class="btn btn--primary" onclick="Cotes.openForm()">+ Ajouter une cote</button>'
-          }) : cotes.map((c, i) => renderCoteRow(c, i)).join('')}
-        </div>
-
-        ${cotes.length > 0 ? renderSummary(cotes) : ''}
-      </div>
+      `}
     `;
 
-    document.getElementById('cotesAdd')?.addEventListener('click', () => openForm());
-    document.getElementById('cotesBibliotheque')?.addEventListener('click', openBibliotheque);
+    document.getElementById('cotesAddCategory')?.addEventListener('click', () => openCategoryForm());
 
-    // Drag and drop
-    const list = document.getElementById('cotesList');
-    if (list && cotes.length > 0 && typeof Sortable !== 'undefined') {
-      sortableInstance = Sortable.create(list, {
-        handle: '.cote-handle',
+    const list = document.getElementById('categoriesCotesList');
+    if (list && typeof Sortable !== 'undefined' && categories.length > 1) {
+      const s = Sortable.create(list, {
+        handle: '.category-handle',
         animation: 200,
-        ghostClass: 'cote-ghost',
+        ghostClass: 'category-ghost',
         onEnd: () => {
-          const ids = Array.from(list.querySelectorAll('.cote-item')).map(el => el.dataset.id);
-          Store.reorderCotes(currentChantierId, ids);
+          const ids = Array.from(list.querySelectorAll('.category-card')).map(el => el.dataset.categoryId);
+          Store.reorderCategoriesCotes(chantier.id, ids);
         }
       });
+      sortableInstances.push(s);
     }
 
-    // Bind row actions via delegation
-    list?.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-action]');
-      if (!btn) return;
-      const id = btn.closest('.cote-item').dataset.id;
-      const action = btn.dataset.action;
-      if (action === 'edit') openForm(id);
-      else if (action === 'delete') deleteRow(id);
-      else if (action === 'duplicate') duplicateRow(id);
+    container.querySelectorAll('.category-card').forEach(card => bindCategoryCardEvents(card));
+
+    container.querySelectorAll('.cotes-list').forEach(cotesList => {
+      if (typeof Sortable !== 'undefined' && cotesList.children.length > 1) {
+        const s = Sortable.create(cotesList, {
+          handle: '.cote-handle',
+          animation: 200,
+          ghostClass: 'cote-ghost',
+          onEnd: () => {
+            const ids = Array.from(cotesList.querySelectorAll('.cote-item')).map(el => el.dataset.id);
+            Store.commit('cote:reorder-category', state => {
+              ids.forEach((id, idx) => {
+                const c = state.cotes.find(x => x.id === id);
+                if (c) c.order = idx;
+              });
+            });
+          }
+        });
+        sortableInstances.push(s);
+      }
     });
   }
 
+  function renderCategoryCard(cat) {
+    const cotes = Store.getCotesByCategorie(cat.id);
+    const totalSurface = cotes.reduce(
+      (s, c) => s + ((c.largeur || 0) * (c.hauteur || 0) * (c.quantite || 1)) / 1000000, 0
+    );
+    const totalUnits = cotes.reduce((s, c) => s + (c.quantite || 1), 0);
+    const isExpanded = expandedCategories.has(cat.id) || cotes.length === 0;
+
+    return `
+      <div class="category-card ${isExpanded ? 'category-card--open' : ''}" data-category-id="${cat.id}">
+        <div class="category-card__header" data-toggle-category="${cat.id}">
+          <span class="category-handle" title="Glisser pour réordonner">⋮⋮</span>
+          <div class="category-card__info">
+            <h2>${Helpers.esc(cat.nom || '(Sans nom)')}</h2>
+            <div class="category-stats">
+              <span><strong>${cotes.length}</strong> cote${cotes.length > 1 ? 's' : ''}</span>
+              ${totalUnits !== cotes.length ? `<span><strong>${totalUnits}</strong> unité${totalUnits > 1 ? 's' : ''}</span>` : ''}
+              <span><strong>${totalSurface.toFixed(2)}</strong> m²</span>
+            </div>
+          </div>
+          <div class="category-card__actions">
+            <button class="btn btn--ghost btn--sm" data-add-cote="${cat.id}">+ Cote</button>
+            <button class="btn-icon" data-edit-category="${cat.id}" title="Renommer">✎</button>
+            <button class="btn-icon btn-icon--danger" data-delete-category="${cat.id}" title="Supprimer">🗑</button>
+            <button class="btn-icon category-toggle" data-toggle-category="${cat.id}" title="${isExpanded ? 'Replier' : 'Déplier'}">${isExpanded ? '▲' : '▼'}</button>
+          </div>
+        </div>
+
+        <div class="category-card__body" ${isExpanded ? '' : 'hidden'}>
+          ${cotes.length === 0 ? `
+            <div class="category-empty">
+              <p>Aucune cote dans cette catégorie pour le moment.</p>
+              <button class="btn btn--primary btn--sm" data-add-cote="${cat.id}">+ Ajouter la première cote</button>
+            </div>
+          ` : `
+            <div class="cotes-table-wrap">
+              <div class="cotes-table-head">
+                <div class="cote-handle-h"></div>
+                <div>N°</div>
+                <div>Emplacement</div>
+                <div>Dimensions (L × H mm)</div>
+                <div>Surface</div>
+                <div>Type</div>
+                <div></div>
+              </div>
+              <div class="cotes-list" data-category-cotes="${cat.id}">
+                ${cotes.map((c, i) => renderCoteRow(c, i)).join('')}
+              </div>
+            </div>
+          `}
+
+          <div class="category-extras">
+            <div class="category-extra-block category-extra-block--schema">
+              <h4>✏️ Schéma</h4>
+              <div class="schema-placeholder">
+                ${cat.schema ? `
+                  <img src="${cat.schema}" alt="Schéma" class="schema-preview">
+                  <button class="btn btn--ghost btn--sm" data-open-schema="${cat.id}">✎ Modifier le schéma</button>
+                ` : `
+                  <p class="hint">Outil de dessin disponible dans la prochaine mise à jour. 🎨</p>
+                  <button class="btn btn--ghost btn--sm" data-open-schema="${cat.id}" disabled>✏️ Dessiner (bientôt)</button>
+                `}
+              </div>
+            </div>
+
+            <div class="category-extra-block category-extra-block--photos">
+              <h4>📸 Photos <span class="hint">(${(cat.photos || []).length}/5)</span></h4>
+              <div class="photos-placeholder">
+                ${(cat.photos || []).length > 0 ? `
+                  <div class="photos-grid">
+                    ${(cat.photos || []).map(p => `
+                      <div class="photo-thumb"><img src="${p.dataUrl}" alt="${Helpers.esc(p.name || '')}"></div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+                <p class="hint">Upload de photos disponible dans la prochaine mise à jour. 📷</p>
+                <button class="btn btn--ghost btn--sm" data-open-photos="${cat.id}" disabled>📸 Ajouter des photos (bientôt)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function bindCategoryCardEvents(card) {
+    const catId = card.dataset.categoryId;
+
+    card.querySelector('.category-card__header')?.addEventListener('click', (e) => {
+      if (e.target.closest('button, .btn, .btn-icon')) return;
+      toggleCategory(catId);
+    });
+
+    card.querySelector('.category-toggle')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCategory(catId);
+    });
+
+    card.querySelectorAll('[data-add-cote]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openCoteForm(null, btn.dataset.addCote);
+      });
+    });
+
+    card.querySelector('[data-edit-category]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openCategoryForm(catId);
+    });
+
+    card.querySelector('[data-delete-category]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteCategory(catId);
+    });
+
+    const cotesList = card.querySelector('.cotes-list');
+    if (cotesList) {
+      cotesList.addEventListener('click', (e) => {
+        const actionBtn = e.target.closest('[data-action]');
+        if (!actionBtn) return;
+        const coteItem = actionBtn.closest('.cote-item');
+        if (!coteItem) return;
+        const coteId = coteItem.dataset.id;
+        const action = actionBtn.dataset.action;
+        if (action === 'edit') openCoteForm(coteId);
+        else if (action === 'delete') deleteCoteRow(coteId);
+        else if (action === 'duplicate') duplicateCoteRow(coteId);
+      });
+    }
+  }
+
+  function toggleCategory(catId) {
+    if (expandedCategories.has(catId)) {
+      expandedCategories.delete(catId);
+    } else {
+      expandedCategories.add(catId);
+    }
+    if (window.Router) Router.refresh();
+  }
+
+  // ============================================================
+  // CATÉGORIE - FORM
+  // ============================================================
+  function openCategoryForm(categoryId = null) {
+    const existing = categoryId
+      ? (Store.state.categoriesCotes || []).find(c => c.id === categoryId)
+      : null;
+    const cat = existing || { nom: '' };
+
+    Modal.open({
+      title: existing ? 'Renommer la catégorie' : 'Nouvelle catégorie d\'ouvrage',
+      size: 'small',
+      body: `
+        <div class="form-grid">
+          <div class="form-field form-field--full">
+            <label>Nom de la catégorie *</label>
+            <input id="f_cat_nom" class="form-input" value="${Helpers.esc(cat.nom)}" placeholder="Ex: Vitrage, Menuiserie, Stores BSO..." autofocus>
+            <p class="hint" style="margin-top:4px">Choisissez un nom qui décrit le type d'ouvrage à réaliser dans cette catégorie.</p>
+          </div>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>
+        <button class="btn btn--primary" id="catSave">${existing ? 'Mettre à jour' : 'Créer la catégorie'}</button>
+      `,
+      onOpen: () => {
+        const input = document.getElementById('f_cat_nom');
+        input?.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') document.getElementById('catSave')?.click();
+        });
+        document.getElementById('catSave').addEventListener('click', () => {
+          const nom = document.getElementById('f_cat_nom').value.trim();
+          if (!nom) { Toast.warning('Le nom est requis'); return; }
+          if (existing) {
+            Store.updateCategorieCote(existing.id, { nom });
+            Toast.success('Catégorie renommée');
+          } else {
+            const newCat = Store.addCategorieCote({ chantierId: currentChantierId, nom });
+            expandedCategories.add(newCat.id);
+            Toast.success('Catégorie créée');
+          }
+          Modal.close();
+          if (window.Router) Router.refresh();
+        });
+      }
+    });
+  }
+
+  function deleteCategory(categoryId) {
+    const cat = (Store.state.categoriesCotes || []).find(c => c.id === categoryId);
+    if (!cat) return;
+    const cotesCount = Store.getCotesByCategorie(categoryId).length;
+
+    Modal.confirm({
+      title: `Supprimer "${cat.nom}" ?`,
+      message: cotesCount > 0
+        ? `Cette catégorie contient <strong>${cotesCount} cote${cotesCount > 1 ? 's' : ''}</strong> qui seront aussi supprimées. Cette action est irréversible.`
+        : 'Cette action est irréversible.',
+      danger: true,
+      onConfirm: () => {
+        Store.deleteCategorieCote(categoryId);
+        expandedCategories.delete(categoryId);
+        Toast.success('Catégorie supprimée');
+        if (window.Router) Router.refresh();
+      }
+    });
+  }
+
+  // ============================================================
+  // COTE - FORM
+  // ============================================================
   function renderCoteRow(cote, index) {
-    const surface = (cote.largeur * cote.hauteur) / 1000000;
+    const surface = ((cote.largeur || 0) * (cote.hauteur || 0)) / 1000000;
     return `
       <div class="cote-item" data-id="${cote.id}">
         <div class="cote-handle" title="Glisser pour réordonner">⋮⋮</div>
@@ -194,7 +417,7 @@ window.Cotes = (function () {
           <span class="mono">${Format.num(cote.largeur)} × ${Format.num(cote.hauteur)}</span>
         </div>
         <div class="cote-surface">
-          <strong>${Format.surface(cote.largeur, cote.hauteur)}</strong>
+          <strong>${surface.toFixed(3)} m²</strong>
         </div>
         <div class="cote-type">
           ${cote.type ? `<span class="badge badge--info">${Helpers.esc(cote.type)}</span>` : ''}
@@ -209,47 +432,17 @@ window.Cotes = (function () {
     `;
   }
 
-  function renderSummary(cotes) {
-    const totalSurface = cotes.reduce((s, c) => s + (c.largeur * c.hauteur * (c.quantite || 1)) / 1000000, 0);
-    const totalUnits = cotes.reduce((s, c) => s + (c.quantite || 1), 0);
-
-    // Calcul fournitures auto (vitrage par défaut)
-    const joints = totalSurface * 4; // 4m de joint par m² de vitrage approx
-    const parclose = totalSurface * 4;
-    const vis = Math.ceil(totalUnits * 8);
-
-    return `
-      <div class="cote-summary">
-        <h3>📊 Récapitulatif</h3>
-        <div class="cote-summary-grid">
-          <div class="summary-card">
-            <div class="summary-label">Nombre de cotes</div>
-            <div class="summary-value">${cotes.length}</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-label">Unités totales</div>
-            <div class="summary-value">${totalUnits}</div>
-          </div>
-          <div class="summary-card summary-card--highlight">
-            <div class="summary-label">Surface totale</div>
-            <div class="summary-value">${totalSurface.toFixed(2)} m²</div>
-          </div>
-        </div>
-
-        <h4 style="margin-top:var(--sp-6)">🧮 Fournitures estimées</h4>
-        <div class="fournitures-estim">
-          <div class="fourn-row"><span>Joint d'étanchéité</span><strong>≈ ${joints.toFixed(1)} m</strong></div>
-          <div class="fourn-row"><span>Parclose</span><strong>≈ ${parclose.toFixed(1)} m</strong></div>
-          <div class="fourn-row"><span>Vis de fixation</span><strong>≈ ${vis} pcs</strong></div>
-        </div>
-        <p class="hint">Estimations basées sur 4 m de joint/parclose et 8 vis par m² de vitrage. Ajustables dans la bibliothèque d'ouvrages.</p>
-      </div>
-    `;
-  }
-
-  function openForm(coteId = null) {
+  function openCoteForm(coteId = null, categorieId = null) {
     const existing = coteId ? Store.state.cotes.find(c => c.id === coteId) : null;
-    const c = existing || { emplacement: '', largeur: '', hauteur: '', quantite: 1, type: 'Vitrage', notes: '' };
+    const c = existing || {
+      emplacement: '',
+      largeur: '',
+      hauteur: '',
+      quantite: 1,
+      type: 'Vitrage',
+      notes: '',
+      categorieId
+    };
 
     Modal.open({
       title: existing ? 'Modifier la cote' : 'Nouvelle cote',
@@ -308,6 +501,7 @@ window.Cotes = (function () {
         document.getElementById('coteSave').addEventListener('click', () => {
           const data = {
             chantierId: currentChantierId,
+            categorieId: c.categorieId || categorieId,
             emplacement: document.getElementById('f_emplacement').value.trim(),
             largeur: parseFloat(document.getElementById('f_largeur').value) || 0,
             hauteur: parseFloat(document.getElementById('f_hauteur').value) || 0,
@@ -324,6 +518,7 @@ window.Cotes = (function () {
             Toast.success('Cote mise à jour');
           } else {
             Store.addCote(data);
+            if (data.categorieId) expandedCategories.add(data.categorieId);
             Toast.success('Cote ajoutée');
           }
           Modal.close();
@@ -333,7 +528,7 @@ window.Cotes = (function () {
     });
   }
 
-  function deleteRow(id) {
+  function deleteCoteRow(id) {
     Modal.confirm({
       title: 'Supprimer cette cote ?',
       message: 'Cette action est irréversible.',
@@ -346,39 +541,22 @@ window.Cotes = (function () {
     });
   }
 
-  function duplicateRow(id) {
+  function duplicateCoteRow(id) {
     const c = Store.state.cotes.find(c => c.id === id);
     if (!c) return;
     const copy = { ...c };
     delete copy.id;
     delete copy.order;
+    delete copy.createdAt;
     copy.emplacement = c.emplacement + ' (copie)';
     Store.addCote(copy);
     Toast.success('Cote dupliquée');
     if (window.Router) Router.refresh();
   }
 
-  function openBibliotheque() {
-    Modal.open({
-      title: '📚 Bibliothèque d\'ouvrages',
-      size: 'large',
-      body: `
-        <p class="hint">Modèles d'ouvrages standards utilisés pour le calcul automatique des fournitures.</p>
-        <table class="table">
-          <thead><tr><th>Ouvrage</th><th>Joint /m²</th><th>Parclose /m²</th><th>Vis /unité</th></tr></thead>
-          <tbody>
-            <tr><td><strong>Vitrage simple</strong></td><td>4 m</td><td>4 m</td><td>8</td></tr>
-            <tr><td><strong>Double vitrage</strong></td><td>4 m</td><td>4 m</td><td>10</td></tr>
-            <tr><td><strong>Triple vitrage</strong></td><td>4 m</td><td>4 m</td><td>12</td></tr>
-            <tr><td><strong>Store BSO</strong></td><td>—</td><td>—</td><td>6</td></tr>
-            <tr><td><strong>Menuiserie</strong></td><td>6 m</td><td>—</td><td>16</td></tr>
-            <tr><td><strong>Porte</strong></td><td>5 m</td><td>—</td><td>12</td></tr>
-          </tbody>
-        </table>
-      `,
-      footer: `<button class="btn btn--primary" onclick="Modal.close()">Fermer</button>`
-    });
-  }
-
-  return { render, openForm };
+  return {
+    render,
+    openForm: openCoteForm,
+    _addCategory: () => openCategoryForm()
+  };
 })();
