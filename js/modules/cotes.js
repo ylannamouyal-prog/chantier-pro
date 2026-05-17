@@ -150,10 +150,26 @@ window.Cotes = (function () {
         <div class="categories-cotes-list" id="categoriesCotesList">
           ${categories.map(cat => renderCategoryCard(cat)).join('')}
         </div>
+
+        <div class="cotes-footer">
+          <div class="cotes-footer__info">
+            <span class="cotes-footer__icon">✓</span>
+            Tout est sauvegardé automatiquement
+          </div>
+          <button class="btn btn--primary btn--lg" id="cotesFinish">
+            ✓ Enregistrer et fermer
+          </button>
+        </div>
       `}
     `;
 
     document.getElementById('cotesAddCategory')?.addEventListener('click', () => openCategoryForm());
+
+    // Bouton "Enregistrer et fermer" → retour à la liste des chantiers
+    document.getElementById('cotesFinish')?.addEventListener('click', () => {
+      Toast.success('Cotes enregistrées');
+      location.hash = '#/cotes';
+    });
 
     const list = document.getElementById('categoriesCotesList');
     if (list && typeof Sortable !== 'undefined' && categories.length > 1) {
@@ -262,13 +278,18 @@ window.Cotes = (function () {
               <div class="photos-placeholder">
                 ${(cat.photos || []).length > 0 ? `
                   <div class="photos-grid">
-                    ${(cat.photos || []).map(p => `
-                      <div class="photo-thumb"><img src="${p.dataUrl}" alt="${Helpers.esc(p.name || '')}"></div>
+                    ${(cat.photos || []).map((p, i) => `
+                      <div class="photo-thumb" data-photo-cat="${cat.id}" data-photo-idx="${i}">
+                        <img src="${p.dataUrl}" alt="${Helpers.esc(p.name || '')}">
+                        <button class="photo-thumb__delete" data-photo-delete="${cat.id}:${i}" title="Supprimer">×</button>
+                      </div>
                     `).join('')}
                   </div>
-                ` : ''}
-                <p class="hint">Upload de photos disponible dans la prochaine mise à jour. 📷</p>
-                <button class="btn btn--ghost btn--sm" data-open-photos="${cat.id}" disabled>📸 Ajouter des photos (bientôt)</button>
+                ` : `<p class="hint" style="margin:0">Aucune photo pour le moment.</p>`}
+                <input type="file" accept="image/*" capture="environment" multiple class="photo-input" data-photo-input="${cat.id}" hidden>
+                <button class="btn btn--primary btn--sm" data-add-photo="${cat.id}" ${(cat.photos || []).length >= 5 ? 'disabled' : ''}>
+                  📸 ${(cat.photos || []).length >= 5 ? 'Maximum atteint (5/5)' : 'Ajouter une photo'}
+                </button>
               </div>
             </div>
           </div>
@@ -321,6 +342,81 @@ window.Cotes = (function () {
         else if (action === 'duplicate') duplicateCoteRow(coteId);
       });
     }
+
+    // ====== PHOTOS ======
+    // Bouton "+ Ajouter une photo" → ouvre le sélecteur de fichiers
+    card.querySelector('[data-add-photo]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const fileInput = card.querySelector(`[data-photo-input="${catId}"]`);
+      fileInput?.click();
+    });
+
+    // Sélection d'une photo
+    card.querySelector(`[data-photo-input="${catId}"]`)?.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
+      const cat = (Store.state.categoriesCotes || []).find(c => c.id === catId);
+      if (!cat) return;
+      const currentPhotos = cat.photos || [];
+      const remaining = 5 - currentPhotos.length;
+      if (remaining <= 0) {
+        Toast.warning('Maximum 5 photos par catégorie');
+        return;
+      }
+      const filesToAdd = files.slice(0, remaining);
+      if (files.length > remaining) {
+        Toast.warning(`Seulement ${remaining} photo(s) pourront être ajoutées (max 5)`);
+      }
+
+      const newPhotos = [];
+      for (const file of filesToAdd) {
+        try {
+          const compressed = await compressImage(file, 1280, 0.85);
+          newPhotos.push({
+            id: 'ph_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            name: file.name,
+            dataUrl: compressed,
+            addedAt: new Date().toISOString()
+          });
+        } catch (err) {
+          console.error(err);
+          Toast.error('Erreur lors du traitement de ' + file.name);
+        }
+      }
+
+      if (newPhotos.length > 0) {
+        Store.updateCategorieCote(catId, {
+          photos: [...currentPhotos, ...newPhotos]
+        });
+        Toast.success(`${newPhotos.length} photo(s) ajoutée(s)`);
+        expandedCategories.add(catId);
+        if (window.Router) Router.refresh();
+      }
+
+      // Reset input
+      e.target.value = '';
+    });
+
+    // Click sur une vignette → voir en grand
+    card.querySelectorAll('.photo-thumb img').forEach(img => {
+      img.addEventListener('click', (e) => {
+        const thumb = e.target.closest('.photo-thumb');
+        const idx = parseInt(thumb?.dataset?.photoIdx);
+        if (isNaN(idx)) return;
+        const cat = (Store.state.categoriesCotes || []).find(c => c.id === catId);
+        const photo = cat?.photos?.[idx];
+        if (photo) openPhotoViewer(photo, cat.photos, idx, catId);
+      });
+    });
+
+    // Suppression d'une photo (bouton ×)
+    card.querySelectorAll('[data-photo-delete]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const [cId, idxStr] = btn.dataset.photoDelete.split(':');
+        deletePhoto(cId, parseInt(idxStr));
+      });
+    });
   }
 
   function toggleCategory(catId) {
@@ -552,6 +648,118 @@ window.Cotes = (function () {
     Store.addCote(copy);
     Toast.success('Cote dupliquée');
     if (window.Router) Router.refresh();
+  }
+
+  // ============================================================
+  // PHOTOS - Compression / Viewer / Delete
+  // ============================================================
+  function compressImage(file, maxSize = 1280, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      if (!file.type.startsWith('image/')) {
+        reject(new Error('Le fichier n\'est pas une image'));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Image illisible'));
+        img.onload = () => {
+          let { width, height } = img;
+          // Redimensionnement proportionnel si > maxSize
+          if (width > maxSize || height > maxSize) {
+            if (width > height) {
+              height = Math.round((height / width) * maxSize);
+              width = maxSize;
+            } else {
+              width = Math.round((width / height) * maxSize);
+              height = maxSize;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(dataUrl);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function openPhotoViewer(photo, allPhotos, idx, catId) {
+    Modal.open({
+      title: photo.name || 'Photo',
+      size: 'large',
+      body: `
+        <div class="photo-viewer">
+          <button class="photo-viewer__nav photo-viewer__nav--prev" id="photoPrev" ${idx === 0 ? 'disabled' : ''}>‹</button>
+          <img id="photoViewerImg" src="${photo.dataUrl}" alt="${Helpers.esc(photo.name || '')}">
+          <button class="photo-viewer__nav photo-viewer__nav--next" id="photoNext" ${idx === allPhotos.length - 1 ? 'disabled' : ''}>›</button>
+        </div>
+        <div class="photo-viewer__info">
+          <span>${idx + 1} / ${allPhotos.length}</span>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn--danger" id="photoDelete">🗑 Supprimer</button>
+        <button class="btn btn--primary" onclick="Modal.close()">Fermer</button>
+      `,
+      onOpen: () => {
+        let currentIdx = idx;
+        const imgEl = document.getElementById('photoViewerImg');
+        const prevBtn = document.getElementById('photoPrev');
+        const nextBtn = document.getElementById('photoNext');
+        const info = document.querySelector('.photo-viewer__info span');
+
+        const updateView = () => {
+          const p = allPhotos[currentIdx];
+          if (!p) return;
+          imgEl.src = p.dataUrl;
+          imgEl.alt = p.name || '';
+          info.textContent = `${currentIdx + 1} / ${allPhotos.length}`;
+          prevBtn.disabled = currentIdx === 0;
+          nextBtn.disabled = currentIdx === allPhotos.length - 1;
+        };
+
+        prevBtn?.addEventListener('click', () => {
+          if (currentIdx > 0) { currentIdx--; updateView(); }
+        });
+        nextBtn?.addEventListener('click', () => {
+          if (currentIdx < allPhotos.length - 1) { currentIdx++; updateView(); }
+        });
+
+        document.addEventListener('keydown', function escNav(e) {
+          if (e.key === 'ArrowLeft' && currentIdx > 0) { currentIdx--; updateView(); }
+          else if (e.key === 'ArrowRight' && currentIdx < allPhotos.length - 1) { currentIdx++; updateView(); }
+        }, { once: false });
+
+        document.getElementById('photoDelete')?.addEventListener('click', () => {
+          Modal.close();
+          deletePhoto(catId, currentIdx);
+        });
+      }
+    });
+  }
+
+  function deletePhoto(catId, idx) {
+    Modal.confirm({
+      title: 'Supprimer cette photo ?',
+      message: 'Cette action est irréversible.',
+      danger: true,
+      onConfirm: () => {
+        const cat = (Store.state.categoriesCotes || []).find(c => c.id === catId);
+        if (!cat) return;
+        const newPhotos = (cat.photos || []).filter((_, i) => i !== idx);
+        Store.updateCategorieCote(catId, { photos: newPhotos });
+        Toast.success('Photo supprimée');
+        expandedCategories.add(catId);
+        if (window.Router) Router.refresh();
+      }
+    });
   }
 
   return {
