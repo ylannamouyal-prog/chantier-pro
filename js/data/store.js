@@ -9,7 +9,8 @@ const Store = {
   state: {
     chantiers:    [],
     clients:      [],
-    cotes:        [],       // prises de cotes (rattachées à un chantierId)
+    cotes:        [],       // prises de cotes (rattachées à un chantierId + categorieId)
+    categoriesCotes: [],    // catégories d'ouvrages (regroupent les cotes par type)
     fournitures:  [],       // référentiel fournitures
     stockAtelier: {},       // { fournitureId: qte }
     stockCamions: {},       // { equipeId: { fournitureId: qte } }
@@ -213,6 +214,120 @@ const Store = {
     return this.state.cotes
       .filter(c => c.chantierId === chantierId)
       .sort((a, b) => (a.order || 0) - (b.order || 0));
+  },
+
+  // ============================================================
+  // CATÉGORIES DE COTES (regroupement par type d'ouvrage)
+  // ============================================================
+  /**
+   * Une catégorie = {
+   *   id, chantierId, nom (libre, ex: "Vitrage"),
+   *   schema (string base64 du dessin SVG/PNG), schemaData (Fabric JSON),
+   *   photos: [{ id, dataUrl, name }],
+   *   order, createdAt, updatedAt
+   * }
+   */
+  addCategorieCote(data) {
+    if (!this.state.categoriesCotes) this.state.categoriesCotes = [];
+    const existingForChantier = this.state.categoriesCotes
+      .filter(c => c.chantierId === data.chantierId).length;
+    const cat = {
+      id: Helpers.uid('cat_'),
+      chantierId: null,
+      nom: '',
+      schema: null,
+      schemaData: null,
+      photos: [],
+      order: existingForChantier,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...data
+    };
+    this.commit('catCote:add', s => {
+      if (!s.categoriesCotes) s.categoriesCotes = [];
+      s.categoriesCotes.push(cat);
+    });
+    return cat;
+  },
+
+  updateCategorieCote(id, patch) {
+    this.commit('catCote:update', s => {
+      if (!s.categoriesCotes) return;
+      const c = s.categoriesCotes.find(x => x.id === id);
+      if (c) {
+        Object.assign(c, patch);
+        c.updatedAt = new Date().toISOString();
+      }
+    });
+  },
+
+  deleteCategorieCote(id) {
+    this.commit('catCote:delete', s => {
+      if (!s.categoriesCotes) return;
+      // Supprime aussi toutes les cotes rattachées à cette catégorie
+      s.cotes = s.cotes.filter(c => c.categorieId !== id);
+      s.categoriesCotes = s.categoriesCotes.filter(c => c.id !== id);
+    });
+  },
+
+  getCategoriesByChantier(chantierId) {
+    // Migration auto : si le chantier a des cotes sans catégorie, créer "Cotes générales"
+    this._migrateLegacyCotes(chantierId);
+
+    if (!this.state.categoriesCotes) return [];
+    return this.state.categoriesCotes
+      .filter(c => c.chantierId === chantierId)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+  },
+
+  getCotesByCategorie(categorieId) {
+    return this.state.cotes
+      .filter(c => c.categorieId === categorieId)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+  },
+
+  /** Migration automatique : cotes sans categorieId → catégorie "Cotes générales" */
+  _migrateLegacyCotes(chantierId) {
+    const orphanCotes = this.state.cotes.filter(
+      c => c.chantierId === chantierId && !c.categorieId
+    );
+    if (orphanCotes.length === 0) return;
+
+    // Cherche si "Cotes générales" existe déjà pour ce chantier
+    let cat = (this.state.categoriesCotes || []).find(
+      c => c.chantierId === chantierId && c.nom === 'Cotes générales'
+    );
+
+    if (!cat) {
+      // Création sans déclencher commit/save (sera fait par le caller suivant)
+      cat = {
+        id: Helpers.uid('cat_'),
+        chantierId,
+        nom: 'Cotes générales',
+        schema: null,
+        schemaData: null,
+        photos: [],
+        order: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      if (!this.state.categoriesCotes) this.state.categoriesCotes = [];
+      this.state.categoriesCotes.push(cat);
+    }
+
+    // Rattache toutes les cotes orphelines à cette catégorie
+    orphanCotes.forEach(c => { c.categorieId = cat.id; });
+    this.save();
+  },
+
+  reorderCategoriesCotes(chantierId, orderedIds) {
+    this.commit('catCote:reorder', s => {
+      if (!s.categoriesCotes) return;
+      orderedIds.forEach((id, idx) => {
+        const c = s.categoriesCotes.find(x => x.id === id);
+        if (c && c.chantierId === chantierId) c.order = idx;
+      });
+    });
   },
 
   // ============================================================
@@ -708,7 +823,7 @@ const Store = {
   reset() {
     localStorage.removeItem(STORAGE_KEY);
     this.state = {
-      chantiers: [], clients: [], cotes: [], fournitures: [],
+      chantiers: [], clients: [], cotes: [], categoriesCotes: [], fournitures: [],
       stockAtelier: {}, stockCamions: {}, reservations: [], mouvements: [],
       engins: [], reservationsEngins: [], fournisseurs: [], commandes: [], rdvs: [],
       modeles: [], equipes: [], conducteurs: [], rendezVous: [],
