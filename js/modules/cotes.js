@@ -2,18 +2,114 @@
 window.Cotes = (function () {
   let currentChantierId = null;
   let sortableInstance = null;
+  let listSearchQuery = '';
 
   function render(container, chantierId) {
     currentChantierId = chantierId;
+
+    // CAS 1 : aucun chantier en paramètre → vue de sélection
+    if (!chantierId) {
+      return renderChantierPicker(container);
+    }
+
+    // CAS 2 : chantier introuvable → retour à la liste
     const chantier = Store.state.chantiers.find(c => c.id === chantierId);
     if (!chantier) {
       container.innerHTML = UI.emptyState({
         icon: '📐',
         title: 'Chantier introuvable',
-        message: 'Sélectionnez un chantier pour gérer ses cotes.'
+        message: 'Le chantier sélectionné n\'existe plus.',
+        action: '<a class="btn btn--primary" href="#/cotes">← Voir tous les chantiers</a>'
       });
       return;
     }
+
+    // CAS 3 : chantier valide → affichage normal des cotes
+    renderCotesForChantier(container, chantier);
+  }
+
+  function renderChantierPicker(container) {
+    const chantiers = filterChantiers(Store.state.chantiers);
+
+    container.innerHTML = `
+      <div class="view-header">
+        <div>
+          <h1 class="view-title">📐 Prises de cotes</h1>
+          <p class="view-subtitle">Sélectionnez un chantier pour saisir ou consulter ses cotes</p>
+        </div>
+      </div>
+
+      <div class="filters">
+        <input class="form-input filter-search" id="cotesPickerSearch" placeholder="🔍 Rechercher un chantier..." value="${Helpers.esc(listSearchQuery)}">
+      </div>
+
+      ${chantiers.length === 0 ? UI.emptyState({
+        icon: '📐',
+        title: listSearchQuery ? 'Aucun résultat' : 'Aucun chantier',
+        message: listSearchQuery ? 'Aucun chantier ne correspond à cette recherche.' : 'Créez d\'abord un chantier pour pouvoir saisir ses cotes.',
+        action: !listSearchQuery ? '<a class="btn btn--primary" href="#/chantiers">→ Aller aux chantiers</a>' : ''
+      }) : `
+        <div class="chantiers-picker-grid">
+          ${chantiers.map(renderPickerCard).join('')}
+        </div>
+      `}
+    `;
+
+    const search = document.getElementById('cotesPickerSearch');
+    if (search) {
+      search.addEventListener('input', Helpers.debounce(() => {
+        listSearchQuery = search.value;
+        renderChantierPicker(container);
+        document.getElementById('cotesPickerSearch')?.focus();
+      }, 200));
+    }
+
+    container.querySelectorAll('[data-pick-chantier]').forEach(card => {
+      card.addEventListener('click', () => {
+        location.hash = `#/cotes/${card.dataset.pickChantier}`;
+      });
+    });
+  }
+
+  function filterChantiers(list) {
+    if (!listSearchQuery) return list;
+    const q = listSearchQuery.toLowerCase();
+    return list.filter(c => {
+      const client = Store.state.clients.find(x => x.id === c.clientId);
+      return (c.titre || '').toLowerCase().includes(q) ||
+             (c.numero || '').toLowerCase().includes(q) ||
+             (c.ville || '').toLowerCase().includes(q) ||
+             (c.adresse || '').toLowerCase().includes(q) ||
+             (client?.nom || '').toLowerCase().includes(q);
+    });
+  }
+
+  function renderPickerCard(c) {
+    const client = Store.state.clients.find(x => x.id === c.clientId);
+    const cotesCount = Store.getCotesByChantier(c.id).length;
+    const status = Helpers.computeStatus(c);
+
+    return `
+      <div class="chantier-picker-card" data-pick-chantier="${c.id}">
+        <div class="chantier-picker-card__top">
+          <div class="chantier-picker-card__num mono">${Helpers.esc(c.numero || '')}</div>
+          ${UI.statusBadge(status)}
+        </div>
+        <h3 class="chantier-picker-card__title">${Helpers.esc(c.titre || 'Sans titre')}</h3>
+        ${client ? `<div class="chantier-picker-card__client">👤 ${Helpers.esc(client.nom)}</div>` : ''}
+        ${c.adresse || c.ville ? `<div class="chantier-picker-card__addr">📍 ${Helpers.esc([c.adresse, c.ville].filter(Boolean).join(', '))}</div>` : ''}
+        <div class="chantier-picker-card__footer">
+          <span class="chantier-picker-card__cotes">
+            <strong>${cotesCount}</strong> cote${cotesCount > 1 ? 's' : ''}
+          </span>
+          <span class="chantier-picker-card__action">📐 Saisir →</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCotesForChantier(container, chantier) {
+    const chantierId = chantier.id;
     const cotes = Store.getCotesByChantier(chantierId);
 
     container.innerHTML = `
