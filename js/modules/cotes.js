@@ -264,11 +264,14 @@ window.Cotes = (function () {
               <h4>✏️ Schéma</h4>
               <div class="schema-placeholder">
                 ${cat.schema ? `
-                  <img src="${cat.schema}" alt="Schéma" class="schema-preview">
-                  <button class="btn btn--ghost btn--sm" data-open-schema="${cat.id}">✎ Modifier le schéma</button>
+                  <img src="${cat.schema}" alt="Schéma" class="schema-preview" data-open-schema="${cat.id}" style="cursor:pointer">
+                  <div class="schema-actions">
+                    <button class="btn btn--ghost btn--sm" data-open-schema="${cat.id}">✎ Modifier</button>
+                    <button class="btn-icon btn-icon--danger" data-delete-schema="${cat.id}" title="Supprimer le schéma">🗑</button>
+                  </div>
                 ` : `
-                  <p class="hint">Outil de dessin disponible dans la prochaine mise à jour. 🎨</p>
-                  <button class="btn btn--ghost btn--sm" data-open-schema="${cat.id}" disabled>✏️ Dessiner (bientôt)</button>
+                  <p class="hint" style="margin:0">Aucun schéma. Dessinez à main levée avec formes, texte et couleurs.</p>
+                  <button class="btn btn--primary btn--sm" data-open-schema="${cat.id}">✏️ Dessiner un schéma</button>
                 `}
               </div>
             </div>
@@ -342,6 +345,33 @@ window.Cotes = (function () {
         else if (action === 'duplicate') duplicateCoteRow(coteId);
       });
     }
+
+    // ====== SCHÉMA ======
+    card.querySelectorAll('[data-open-schema]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cId = el.dataset.openSchema;
+        if (window.Schema?.open) {
+          window.Schema.open(cId);
+        } else {
+          Toast.error('Module Schema non chargé');
+        }
+      });
+    });
+
+    card.querySelector('[data-delete-schema]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      Modal.confirm({
+        title: 'Supprimer le schéma ?',
+        message: 'Cette action est irréversible.',
+        danger: true,
+        onConfirm: () => {
+          Store.updateCategorieCote(catId, { schema: null, schemaData: null });
+          Toast.success('Schéma supprimé');
+          if (window.Router) Router.refresh();
+        }
+      });
+    });
 
     // ====== PHOTOS ======
     // Bouton "+ Ajouter une photo" → ouvre le sélecteur de fichiers
