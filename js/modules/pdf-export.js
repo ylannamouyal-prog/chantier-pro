@@ -4,6 +4,67 @@ window.PdfExport = (function () {
     return window.jspdf?.jsPDF || window.jsPDF;
   }
 
+  // ============================================================
+  // CALCUL FOURNITURES ESTIMÉES D'UN CHANTIER
+  // Retourne un tableau de lignes { designation, quantite, unite, prixUnitaire, total }
+  // ============================================================
+  function computeFournituresChantier(cotes) {
+    const totalSurface = cotes.reduce((s, c) => s + (c.largeur * c.hauteur * (c.quantite || 1)) / 1000000, 0);
+    const totalUnits = cotes.reduce((s, c) => s + (c.quantite || 1), 0);
+
+    // Estimations standard (issues du module Cotes)
+    const jointsMetres = totalSurface * 4;       // 4m de joint / m²
+    const parcloseMetres = totalSurface * 4;     // 4m de parclose / m²
+    const visUnits = Math.ceil(totalUnits * 8);  // 8 vis / unité
+
+    // Cherche une fourniture correspondante dans le stock
+    function findFourniture(keywords) {
+      if (!Store.state.fournitures) return null;
+      return Store.state.fournitures.find(f => {
+        const haystack = `${(f.designation || f.nom || '').toLowerCase()} ${(f.reference || '').toLowerCase()} ${(f.categorie || '').toLowerCase()}`;
+        return keywords.some(kw => haystack.includes(kw.toLowerCase()));
+      });
+    }
+
+    const jointFourn = findFourniture(['joint epdm', 'joint étanch', 'joint mousse', 'joint']);
+    const parcloseFourn = findFourniture(['parclose', 'baguette']);
+    const visFourn = findFourniture(['vis fixation', 'vis inox', 'vis']);
+
+    // Prix par défaut si aucune fourniture correspondante n'a un prix
+    const PRIX_DEFAUT = {
+      joint: 1.20,       // €/m
+      parclose: 3.50,    // €/m
+      vis: 0.10          // €/u
+    };
+
+    return [
+      {
+        designation: jointFourn?.designation || jointFourn?.nom || "Joint d'étanchéité",
+        quantite: jointsMetres,
+        unite: jointFourn?.unite || 'm',
+        prixUnitaire: jointFourn?.prixUnitaire || PRIX_DEFAUT.joint,
+        prixSource: jointFourn?.prixUnitaire ? 'stock' : 'défaut',
+        total: jointsMetres * (jointFourn?.prixUnitaire || PRIX_DEFAUT.joint)
+      },
+      {
+        designation: parcloseFourn?.designation || parcloseFourn?.nom || "Parclose",
+        quantite: parcloseMetres,
+        unite: parcloseFourn?.unite || 'm',
+        prixUnitaire: parcloseFourn?.prixUnitaire || PRIX_DEFAUT.parclose,
+        prixSource: parcloseFourn?.prixUnitaire ? 'stock' : 'défaut',
+        total: parcloseMetres * (parcloseFourn?.prixUnitaire || PRIX_DEFAUT.parclose)
+      },
+      {
+        designation: visFourn?.designation || visFourn?.nom || "Vis de fixation",
+        quantite: visUnits,
+        unite: visFourn?.unite || 'pcs',
+        prixUnitaire: visFourn?.prixUnitaire || PRIX_DEFAUT.vis,
+        prixSource: visFourn?.prixUnitaire ? 'stock' : 'défaut',
+        total: visUnits * (visFourn?.prixUnitaire || PRIX_DEFAUT.vis)
+      }
+    ];
+  }
+
   function chantier(id) {
     const JsPDF = getJsPDF();
     if (!JsPDF) { Toast.error('Bibliothèque PDF non chargée'); return; }
@@ -131,6 +192,55 @@ window.PdfExport = (function () {
         margin: { left: margin, right: margin }
       });
       y = doc.lastAutoTable.finalY + 8;
+    }
+
+    // FOURNITURES & COÛT TOTAL
+    if (cotes.length > 0 && doc.autoTable) {
+      if (y > 220) { doc.addPage(); y = margin; }
+      const fournitures = computeFournituresChantier(cotes);
+      const totalHT = fournitures.reduce((s, f) => s + f.total, 0);
+      const hasPrixDefaut = fournitures.some(f => f.prixSource === 'défaut');
+
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(100, 116, 139);
+      doc.text('FOURNITURES ESTIMÉES & COÛT', margin, y);
+      y += 3;
+
+      doc.autoTable({
+        startY: y + 2,
+        head: [['Désignation', 'Quantité', 'Unité', 'Prix unitaire HT', 'Total HT']],
+        body: fournitures.map(f => [
+          f.designation,
+          f.quantite.toFixed(2),
+          f.unite,
+          f.prixUnitaire.toFixed(2) + ' €' + (f.prixSource === 'défaut' ? ' *' : ''),
+          f.total.toFixed(2) + ' €'
+        ]),
+        foot: [['', '', '', 'TOTAL HT', totalHT.toFixed(2) + ' €']],
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+        footStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold', fontSize: 11 },
+        styles: { fontSize: 9, cellPadding: 3 },
+        columnStyles: {
+          1: { halign: 'right' },
+          3: { halign: 'right' },
+          4: { halign: 'right' }
+        },
+        margin: { left: margin, right: margin }
+      });
+      y = doc.lastAutoTable.finalY + 4;
+
+      if (hasPrixDefaut) {
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(100, 116, 139);
+        doc.text('* Prix indicatif (fourniture non trouvée dans le stock — à ajuster dans la page Stocks)', margin, y);
+        y += 6;
+      } else {
+        y += 4;
+      }
+      doc.setTextColor(15, 23, 42);
     }
 
     // Engins
