@@ -2106,6 +2106,183 @@ a.btn-icon:hover {
   }
 }
 
+/* ========== EDITEUR DE SCHEMA (DESSIN) ========== */
+.schema-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.schema-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  align-items: center;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-size: 16px;
+  transition: all var(--t-fast);
+  color: var(--txt-primary);
+  padding: 0;
+}
+.tool-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+.tool-btn--active {
+  background: #3b82f6 !important;
+  color: white !important;
+  border-color: #2563eb !important;
+}
+.tool-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+  color: #dc2626 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+.tool-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.tool-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--txt-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 4px;
+}
+
+.color-palette {
+  display: flex;
+  gap: 4px;
+}
+.color-palette .color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  border: 2px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+  transition: transform var(--t-fast);
+}
+.color-palette .color-swatch:hover {
+  transform: scale(1.15);
+}
+.color-palette .color-swatch.is-active {
+  border-color: var(--txt-primary);
+  box-shadow: 0 0 0 2px var(--bg-elevated), 0 0 0 4px #3b82f6;
+}
+
+.tool-color-picker {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  background: transparent;
+}
+
+.width-slider {
+  width: 100px;
+  cursor: pointer;
+}
+.width-preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  background: var(--bg-sunken);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-xs);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+
+.schema-canvas-wrap {
+  background: #f1f5f9;
+  border: 2px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 4px;
+  overflow: auto;
+  max-height: calc(100vh - 350px);
+  display: flex;
+  justify-content: center;
+}
+.schema-canvas-wrap canvas {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.schema-hint {
+  font-size: var(--fs-sm);
+  color: var(--txt-muted);
+  text-align: center;
+  padding: 4px;
+}
+
+/* Aperçu schéma dans la card */
+.schema-actions {
+  display: flex;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+  width: 100%;
+  justify-content: center;
+}
+
+/* Responsive éditeur schéma */
+@media (max-width: 768px) {
+  .schema-toolbar {
+    gap: var(--s-2);
+    padding: var(--s-2);
+  }
+  .toolbar-group {
+    padding: 4px 6px;
+    gap: 4px;
+  }
+  .tool-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  .color-palette .color-swatch {
+    width: 22px;
+    height: 22px;
+  }
+  .width-slider {
+    width: 70px;
+  }
+  .tool-label {
+    display: none;
+  }
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
   .form-grid { grid-template-columns: 1fr; }
