@@ -10,10 +10,14 @@ const UI = {
     return `<span class="badge ${cls}">${label}</span>`;
   },
 
-  /** Avatar circulaire avec initiales */
-  avatar(name, size = 36) {
-    const color = Helpers.colorFromString(name || '?');
-    return `<div class="client-avatar" style="width:${size}px;height:${size}px;background:${color};font-size:${size * 0.4}px">${Helpers.initials(name)}</div>`;
+  /** Avatar circulaire avec initiales.
+   *  size: 'xs' | 'sm' | 'md' | 'lg' | number (pixels)
+   *  color (optionnel): couleur de fond, sinon dérivée du nom */
+  avatar(name, size = 'md', color = null) {
+    const sizes = { xs: 22, sm: 28, md: 36, lg: 48 };
+    const px = typeof size === 'number' ? size : (sizes[size] || 36);
+    const bg = color || Helpers.colorFromString(name || '?');
+    return `<div class="client-avatar" style="width:${px}px;height:${px}px;background:${bg};font-size:${Math.max(10, px * 0.4)}px">${Helpers.initials(name)}</div>`;
   },
 
   /** État vide */
