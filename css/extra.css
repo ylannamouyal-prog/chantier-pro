@@ -2529,6 +2529,77 @@ a.btn-icon:hover {
   cursor: pointer;
 }
 
+/* ========== EQUIPES REFONDUES (chef + membres) ========== */
+.equipe-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--s-2);
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+  margin-bottom: 6px;
+}
+.equipe-section__title {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--txt-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.equipe-member {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
+}
+.membres-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.membre-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.equipe-stats {
+  margin-top: var(--s-2);
+  padding: var(--s-2);
+  background: var(--bg-elevated);
+  border-radius: var(--r-md);
+  text-align: center;
+  font-size: var(--fs-sm);
+  color: var(--txt-muted);
+}
+.equipe-stats strong {
+  color: var(--txt-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Picker personnel dans le form équipe */
+.personnel-picker-section {
+  margin-bottom: var(--s-3);
+}
+.personnel-picker-section__title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--txt-secondary);
+  margin-bottom: 6px;
+}
+
+.color-swatch-lg {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  flex-shrink: 0;
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
   .form-grid { grid-template-columns: 1fr; }
