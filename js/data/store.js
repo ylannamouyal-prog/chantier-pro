@@ -695,12 +695,23 @@ const Store = {
   // ============================================================
   // EQUIPES / CONDUCTEURS
   // ============================================================
+  /**
+   * Une équipe = {
+   *   id, nom, couleur, specialite,
+   *   chefId: id du personnel chef d'équipe (optionnel),
+   *   membresIds: [ids personnel] (ouvriers/alternants),
+   *   membres: ancien champ texte libre (déprécié mais gardé pour compatibilité)
+   * }
+   */
   addEquipe(data) {
     const e = {
       id: Helpers.uid('eq_'),
       nom: '',
       couleur: '#3B82F6',
-      membres: [],
+      specialite: '',
+      chefId: null,
+      membresIds: [],
+      membres: [], // legacy, ne plus utiliser
       ...data
     };
     this.commit('equipe:add', s => s.equipes.push(e));
@@ -718,6 +729,60 @@ const Store = {
     this.commit('equipe:delete', s => {
       s.equipes = s.equipes.filter(e => e.id !== id);
     });
+  },
+
+  /** Récupère tous les membres d'une équipe (chef + ouvriers + alternants) */
+  getEquipeMembers(equipeId) {
+    const eq = this.state.equipes.find(e => e.id === equipeId);
+    if (!eq) return { chef: null, membres: [] };
+    const chef = eq.chefId ? this.state.personnel.find(p => p.id === eq.chefId) : null;
+    const membres = (eq.membresIds || [])
+      .map(id => this.state.personnel.find(p => p.id === id))
+      .filter(Boolean);
+    return { chef, membres };
+  },
+
+  /** Vérifie si une personne est déjà engagée ailleurs un jour donné (chantier ou absence)
+   *  Retourne { ok: bool, reason, chantierId? } */
+  isPersonAvailable(personnelId, dateDebut, dateFin, excludeChantierId = null) {
+    // Vérif absence
+    const d1 = new Date(dateDebut);
+    const d2 = new Date(dateFin || dateDebut);
+    const absences = (this.state.absences || []).filter(a => {
+      if (a.personnelId !== personnelId) return false;
+      const ad = new Date(a.dateDebut);
+      const af = new Date(a.dateFin);
+      return ad <= d2 && af >= d1;
+    });
+    if (absences.length > 0) {
+      const type = this.getTypeAbsence(absences[0].typeId);
+      return { ok: false, reason: 'absence', type, absence: absences[0] };
+    }
+
+    // Vérif chantier en cours
+    const conflits = this.state.chantiers.filter(c => {
+      if (excludeChantierId && c.id === excludeChantierId) return false;
+      if (!c.dateDebut || !c.dateFin) return false;
+      const cd = new Date(c.dateDebut);
+      const cf = new Date(c.dateFin);
+      if (!(cd <= d2 && cf >= d1)) return false;
+
+      // La personne est-elle dans l'équipe ou les renforts du chantier ?
+      const eq = c.equipeId ? this.state.equipes.find(e => e.id === c.equipeId) : null;
+      const inEquipe = eq && (eq.chefId === personnelId || (eq.membresIds || []).includes(personnelId));
+      const inRenforts = (c.renforts || []).includes(personnelId);
+
+      // S'il y a personnel exclu/ajouté pour ce chantier précisément
+      const exclude = (c.personnelExclu || []).includes(personnelId);
+      if (exclude) return false; // exclu de ce chantier précis, donc pas de conflit ici
+
+      return inEquipe || inRenforts;
+    });
+    if (conflits.length > 0) {
+      return { ok: false, reason: 'chantier', chantier: conflits[0] };
+    }
+
+    return { ok: true };
   },
 
   addConducteur(data) {
