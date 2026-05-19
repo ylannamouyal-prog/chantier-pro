@@ -14,6 +14,7 @@
     '/fournisseurs': { module: 'Fournisseurs', title: 'Fournisseurs', nav: 'fournisseurs' },
     '/commandes': { module: 'Commandes', title: 'Commandes', nav: 'commandes' },
     '/equipes': { module: 'Equipes', title: 'Équipes', nav: 'equipes' },
+    '/personnel': { module: 'Personnel', title: 'Personnel', nav: 'personnel' },
     '/parametres': { module: 'Parametres', title: 'Paramètres', nav: 'parametres' }
   };
 
@@ -194,6 +195,13 @@
     // 2) If empty, load demo
     if (Store.state.chantiers.length === 0 && Store.state.clients.length === 0) {
       Store.loadDemoData();
+    }
+    // 2bis) Migration : conducteurs + membres équipes → personnel
+    if (typeof Store.migrateConducteursToPersonnel === 'function') {
+      const migrated = Store.migrateConducteursToPersonnel();
+      if (migrated > 0) {
+        console.log(`[ChantierPro] ${migrated} membre(s) migré(s) vers la nouvelle entité Personnel`);
+      }
     }
     // 3) Theme
     applyTheme(Store.state.parametres?.theme);
