@@ -15,8 +15,10 @@ const Planning = {
       equipes: new Set(Store.state.equipes.map(e => e.id)),
       // Nouveau : types d'événements (chantiers et RDV activés par défaut)
       chantiers: true,
-      rendezVous: true,
-      commandes: false
+      rdvs: true,
+      commandes: false,
+      absences: true,
+      alternants: false
     };
     this._filters.conducteurs.add('__none__');
   },
@@ -97,9 +99,19 @@ const Planning = {
               <span class="filter-row__label">Chantiers</span>
             </label>
             <label class="filter-row">
-              <input type="checkbox" data-filter-type="rendezVous" ${this._filters.rendezVous ? 'checked' : ''}>
+              <input type="checkbox" data-filter-type="rdvs" ${this._filters.rdvs ? 'checked' : ''}>
               <span class="filter-row__icon">📅</span>
               <span class="filter-row__label">Rendez-vous</span>
+            </label>
+            <label class="filter-row">
+              <input type="checkbox" data-filter-type="absences" ${this._filters.absences ? 'checked' : ''}>
+              <span class="filter-row__icon">🌴</span>
+              <span class="filter-row__label">Absences</span>
+            </label>
+            <label class="filter-row">
+              <input type="checkbox" data-filter-type="alternants" ${this._filters.alternants ? 'checked' : ''}>
+              <span class="filter-row__icon">🎓</span>
+              <span class="filter-row__label">Présence alternants</span>
             </label>
           </div>
 
@@ -212,10 +224,19 @@ const Planning = {
           if (rdvId && window.RendezVous) {
             window.RendezVous.openDetail(rdvId);
           }
+        } else if (type === 'absence') {
+          const absenceId = info.event.extendedProps.absenceId;
+          if (absenceId && window.Absences) {
+            window.Absences.openDetail(absenceId);
+          }
         } else {
           const chantierId = info.event.extendedProps.chantierId;
           if (chantierId) Chantiers.openDetail(chantierId);
         }
+      },
+      dateClick: (info) => {
+        // Au clic sur un jour vide, on propose un menu : chantier / RDV / absence
+        this._openDateActionMenu(info.dateStr);
       },
       eventDrop: (info) => {
         const type = info.event.extendedProps.type;
@@ -279,7 +300,7 @@ const Planning = {
             info.el.title = `⚠️ ALERTE STOCK\n${f.nom}\nStock actuel : ${total} ${f.unite}\nSeuil : ${f.seuilAlerte}\n\nCliquer pour créer une commande`;
           }
         } else if (type === 'rdv') {
-          const r = Store.state.rendezVous.find(x => x.id === info.event.extendedProps.rdvId);
+          const r = Store.state.rdvs.find(x => x.id === info.event.extendedProps.rdvId);
           if (r) {
             const cond = Store.state.conducteurs.find(c => c.id === r.conducteurId);
             const tInfo = window.RendezVous?.typeInfo?.(r.type) || { label: r.type, icon: '📅' };
@@ -340,8 +361,8 @@ const Planning = {
     }
 
     // 2) RENDEZ-VOUS (si filtre activé)
-    if (this._filters.rendezVous) {
-      (Store.state.rendezVous || [])
+    if (this._filters.rdvs) {
+      (Store.state.rdvs || [])
         .filter(r => {
           const condId = r.conducteurId || '__none__';
           return this._filters.conducteurs.has(condId);
@@ -408,7 +429,109 @@ const Planning = {
       });
     }
 
+    // 5) ABSENCES (si filtre activé)
+    if (this._filters.absences) {
+      (Store.state.absences || []).forEach(a => {
+        const p = (Store.state.personnel || []).find(x => x.id === a.personnelId);
+        if (!p) return;
+
+        // Filtre conducteur : si la personne est conducteur, vérifier le filtre
+        if (p.role === 'conducteur') {
+          const legacyId = p._legacyConducteurId;
+          // Vérifie si cette personne (par son id ou son legacy id) est dans les filtres
+          if (!this._filters.conducteurs.has(p.id) && !this._filters.conducteurs.has(legacyId) && !this._filters.conducteurs.has('__none__')) {
+            return;
+          }
+        }
+
+        const type = Store.getTypeAbsence(a.typeId);
+        const fullName = [p.prenom, p.nom].filter(Boolean).join(' ') || p.nom;
+        const endDate = new Date(a.dateFin);
+        endDate.setDate(endDate.getDate() + 1);
+
+        events.push({
+          id: 'abs_' + a.id,
+          title: `${type.icon} ${fullName} — ${type.label}`,
+          start: a.dateDebut,
+          end: endDate.toISOString().split('T')[0],
+          allDay: true,
+          backgroundColor: type.couleur,
+          borderColor: type.couleur,
+          textColor: '#ffffff',
+          extendedProps: { absenceId: a.id, type: 'absence', personnelId: p.id },
+          editable: false,
+          classNames: ['planning-absence', `planning-absence--${a.typeId}`]
+        });
+      });
+    }
+
+    // 6) ALTERNANTS (présence) — bandes vertes simples par jour
+    if (this._filters.alternants) {
+      const alternants = (Store.state.personnel || []).filter(p => p.role === 'alternant' && p.actif !== false);
+      // Pour le mois affiché, marquer chaque jour de présence configuré (pour V1, on prend les absences inverses)
+      // V1 simple : on affiche juste un indicateur "présent" pour chaque alternant chaque jour où il n'est pas en absence
+      // Pour ne pas surcharger, on n'affiche que sur les 60 prochains jours
+      const today = new Date();
+      const horizon = new Date();
+      horizon.setDate(horizon.getDate() + 60);
+
+      alternants.forEach(alt => {
+        const absences = (Store.state.absences || []).filter(a => a.personnelId === alt.id);
+        const fullName = [alt.prenom, alt.nom].filter(Boolean).join(' ') || alt.nom;
+        // On ne crée pas une bande par jour (lourd), on signale plutôt les absences existantes
+        // L'indicateur "présent" sera implicite : pas d'absence = présent
+        // Donc en V1 on n'ajoute rien ici, mais on affiche une note dans la sidebar
+        // [Le filtre alternants est un complément informatif pour le moment]
+      });
+    }
+
     return events;
+  },
+
+  /** Menu d'action au clic sur un jour vide du calendrier */
+  _openDateActionMenu(dateStr) {
+    Modal.open({
+      title: `Créer pour le ${Format.dateShort(dateStr)}`,
+      size: 'small',
+      body: `
+        <p class="hint" style="margin:0 0 var(--s-3)">Que voulez-vous créer ?</p>
+        <div class="date-action-grid">
+          <button class="date-action-btn" data-action="chantier">
+            <span class="date-action-icon" style="background:rgba(59,130,246,0.15);color:#3b82f6">🏗️</span>
+            <strong>Nouveau chantier</strong>
+            <span class="hint">Avec dates, conducteur, équipe...</span>
+          </button>
+          <button class="date-action-btn" data-action="rdv">
+            <span class="date-action-icon" style="background:rgba(99,102,241,0.15);color:#6366f1">📅</span>
+            <strong>Nouveau rendez-vous</strong>
+            <span class="hint">Métré, visite client, livraison...</span>
+          </button>
+          <button class="date-action-btn" data-action="absence">
+            <span class="date-action-icon" style="background:rgba(16,185,129,0.15);color:#10b981">🌴</span>
+            <strong>Nouvelle absence</strong>
+            <span class="hint">Congés, maladie, formation...</span>
+          </button>
+        </div>
+      `,
+      footer: `<button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>`,
+      onOpen: () => {
+        document.querySelectorAll('.date-action-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            Modal.close();
+            setTimeout(() => {
+              if (action === 'chantier' && window.Chantiers) {
+                window.Chantiers.openCreate({ dateDebut: dateStr, dateFin: dateStr });
+              } else if (action === 'rdv' && window.RendezVous) {
+                window.RendezVous.openForm(null, { date: dateStr });
+              } else if (action === 'absence' && window.Absences) {
+                window.Absences.openForm(null, { dateDebut: dateStr, dateFin: dateStr });
+              }
+            }, 100);
+          });
+        });
+      }
+    });
   },
 
   _openCreateCommandeForAlerte(fournitureId) {
