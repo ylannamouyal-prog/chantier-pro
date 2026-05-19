@@ -23,7 +23,10 @@ const Store = {
     rdvs:         [],       // rendez-vous (visites, métrés, etc.)
     modeles:      [],       // modèles de chantier (bibliothèque de fournitures par type)
     equipes:      [],       // équipes avec couleur
-    conducteurs:  [],       // conducteurs avec couleur
+    conducteurs:  [],       // conducteurs avec couleur (legacy - migré vers personnel)
+    personnel:    [],       // personnel complet : conducteurs, chefs, ouvriers, alternants
+    absences:     [],       // congés, maladie, formation, etc.
+    typesAbsence: [],       // types personnalisés en plus des types par défaut
     rendezVous:   [],       // rendez-vous (métré, visite, livraison...)
     parametres: {
       entreprise: {
@@ -743,6 +746,281 @@ const Store = {
   },
 
   // ============================================================
+  // PERSONNEL (unifié : conducteurs, chefs, ouvriers, alternants)
+  // ============================================================
+  /**
+   * Un membre du personnel = {
+   *   id, nom, prenom (optionnel), role ('conducteur'|'chef'|'ouvrier'|'alternant'|'autre'),
+   *   couleur, telephone, email, equipeIds: [],
+   *   actif (bool), createdAt, updatedAt
+   * }
+   */
+  addPersonnel(data) {
+    const p = {
+      id: Helpers.uid('pers_'),
+      nom: '',
+      prenom: '',
+      role: 'ouvrier',
+      couleur: '#3b82f6',
+      telephone: '',
+      email: '',
+      equipeIds: [],
+      actif: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...data
+    };
+    this.commit('personnel:add', s => {
+      if (!s.personnel) s.personnel = [];
+      s.personnel.push(p);
+    });
+    return p;
+  },
+
+  updatePersonnel(id, patch) {
+    this.commit('personnel:update', s => {
+      if (!s.personnel) return;
+      const p = s.personnel.find(x => x.id === id);
+      if (p) {
+        Object.assign(p, patch);
+        p.updatedAt = new Date().toISOString();
+      }
+    });
+  },
+
+  deletePersonnel(id) {
+    this.commit('personnel:delete', s => {
+      if (!s.personnel) return;
+      // Supprimer aussi les absences liées
+      if (s.absences) s.absences = s.absences.filter(a => a.personnelId !== id);
+      s.personnel = s.personnel.filter(p => p.id !== id);
+    });
+  },
+
+  /**
+   * Migration automatique :
+   * - Conducteurs existants → personnel (rôle = 'conducteur')
+   * - Membres texte libre des équipes → personnel (rôle = 'ouvrier')
+   */
+  migrateConducteursToPersonnel() {
+    if (!this.state.personnel) this.state.personnel = [];
+
+    let migrated = 0;
+
+    // Migrer les conducteurs
+    (this.state.conducteurs || []).forEach(c => {
+      // Vérifier qu'il n'existe pas déjà dans le personnel
+      const exists = this.state.personnel.some(p =>
+        p._legacyConducteurId === c.id ||
+        (p.role === 'conducteur' && p.nom === c.nom)
+      );
+      if (exists) return;
+
+      this.state.personnel.push({
+        id: Helpers.uid('pers_'),
+        _legacyConducteurId: c.id,
+        nom: c.nom || 'Sans nom',
+        prenom: c.prenom || '',
+        role: 'conducteur',
+        couleur: c.couleur || '#3b82f6',
+        telephone: c.telephone || '',
+        email: c.email || '',
+        equipeIds: [],
+        actif: true,
+        createdAt: c.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      migrated++;
+    });
+
+    // Migrer les membres texte libre des équipes
+    (this.state.equipes || []).forEach(eq => {
+      if (!eq.membres) return;
+      // Les membres peuvent être string ou array
+      let membresArr = [];
+      if (typeof eq.membres === 'string') {
+        membresArr = eq.membres.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+      } else if (Array.isArray(eq.membres)) {
+        membresArr = eq.membres.filter(Boolean);
+      }
+
+      membresArr.forEach(nom => {
+        if (typeof nom !== 'string' || !nom.trim()) return;
+        const cleanNom = nom.trim();
+        // Vérifier doublon
+        const exists = this.state.personnel.some(p =>
+          (p.nom + ' ' + (p.prenom || '')).toLowerCase().includes(cleanNom.toLowerCase()) ||
+          cleanNom.toLowerCase().includes(p.nom.toLowerCase())
+        );
+        if (exists) {
+          // Ajouter l'équipe à la personne existante si pas déjà
+          const existing = this.state.personnel.find(p =>
+            (p.nom + ' ' + (p.prenom || '')).toLowerCase().includes(cleanNom.toLowerCase()) ||
+            cleanNom.toLowerCase().includes(p.nom.toLowerCase())
+          );
+          if (existing && !existing.equipeIds.includes(eq.id)) {
+            existing.equipeIds.push(eq.id);
+          }
+          return;
+        }
+
+        this.state.personnel.push({
+          id: Helpers.uid('pers_'),
+          nom: cleanNom,
+          prenom: '',
+          role: 'ouvrier',
+          couleur: eq.couleur || '#3b82f6',
+          telephone: '',
+          email: '',
+          equipeIds: [eq.id],
+          actif: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        migrated++;
+      });
+    });
+
+    if (migrated > 0) {
+      this.save();
+    }
+    return migrated;
+  },
+
+  getPersonnelByRole(role) {
+    return (this.state.personnel || []).filter(p => p.role === role && p.actif !== false);
+  },
+
+  getPersonnelByEquipe(equipeId) {
+    return (this.state.personnel || []).filter(p =>
+      (p.equipeIds || []).includes(equipeId) && p.actif !== false
+    );
+  },
+
+  // ============================================================
+  // ABSENCES (congés, maladie, formation, etc.)
+  // ============================================================
+  /**
+   * Types d'absence par défaut. L'utilisateur peut en ajouter d'autres via typesAbsence.
+   */
+  TYPES_ABSENCE_DEFAUT: [
+    { id: 'conges',    label: 'Congés payés',    icon: '🌴', couleur: '#10b981' },
+    { id: 'maladie',   label: 'Maladie',         icon: '🏥', couleur: '#ef4444' },
+    { id: 'familial',  label: 'Congé familial',  icon: '👶', couleur: '#f59e0b' },
+    { id: 'formation', label: 'Formation',       icon: '📚', couleur: '#8b5cf6' },
+    { id: 'rtt',       label: 'RTT',             icon: '⏰', couleur: '#06b6d4' },
+    { id: 'autre',     label: 'Autre',           icon: '📅', couleur: '#64748b' }
+  ],
+
+  getTypesAbsence() {
+    return [...this.TYPES_ABSENCE_DEFAUT, ...(this.state.typesAbsence || [])];
+  },
+
+  getTypeAbsence(typeId) {
+    return this.getTypesAbsence().find(t => t.id === typeId) || this.TYPES_ABSENCE_DEFAUT[5];
+  },
+
+  addTypeAbsence(data) {
+    const t = {
+      id: 'custom_' + Helpers.uid('').replace('_', ''),
+      label: '',
+      icon: '📅',
+      couleur: '#64748b',
+      ...data
+    };
+    this.commit('typeAbsence:add', s => {
+      if (!s.typesAbsence) s.typesAbsence = [];
+      s.typesAbsence.push(t);
+    });
+    return t;
+  },
+
+  /**
+   * Une absence = {
+   *   id, personnelId, typeId, dateDebut, dateFin,
+   *   notes, createdAt, updatedAt
+   * }
+   */
+  addAbsence(data) {
+    const a = {
+      id: Helpers.uid('abs_'),
+      personnelId: null,
+      typeId: 'conges',
+      dateDebut: new Date().toISOString().split('T')[0],
+      dateFin: new Date().toISOString().split('T')[0],
+      notes: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...data
+    };
+    this.commit('absence:add', s => {
+      if (!s.absences) s.absences = [];
+      s.absences.push(a);
+    });
+    return a;
+  },
+
+  updateAbsence(id, patch) {
+    this.commit('absence:update', s => {
+      if (!s.absences) return;
+      const a = s.absences.find(x => x.id === id);
+      if (a) {
+        Object.assign(a, patch);
+        a.updatedAt = new Date().toISOString();
+      }
+    });
+  },
+
+  deleteAbsence(id) {
+    this.commit('absence:delete', s => {
+      if (!s.absences) return;
+      s.absences = s.absences.filter(a => a.id !== id);
+    });
+  },
+
+  /** Vérifie si une personne est en absence à une date donnée */
+  isPersonnelAbsent(personnelId, dateISO) {
+    const d = new Date(dateISO);
+    return (this.state.absences || []).some(a => {
+      if (a.personnelId !== personnelId) return false;
+      const debut = new Date(a.dateDebut);
+      const fin = new Date(a.dateFin);
+      return d >= debut && d <= fin;
+    });
+  },
+
+  /** Retourne les absences qui chevauchent une période */
+  getAbsencesForPeriod(personnelId, dateDebut, dateFin) {
+    const d1 = new Date(dateDebut);
+    const d2 = new Date(dateFin);
+    return (this.state.absences || []).filter(a => {
+      if (a.personnelId !== personnelId) return false;
+      const ad = new Date(a.dateDebut);
+      const af = new Date(a.dateFin);
+      // Chevauchement si: début_a <= fin_periode && fin_a >= début_periode
+      return ad <= d2 && af >= d1;
+    });
+  },
+
+  /** Vérifie si un conducteur peut être attribué à un chantier (pas d'absence) */
+  canAssignToChantier(personnelOrConducteurId, dateDebut, dateFin) {
+    // Cherche dans le personnel (avec support legacy conducteur)
+    const personnel = (this.state.personnel || []).find(p =>
+      p.id === personnelOrConducteurId || p._legacyConducteurId === personnelOrConducteurId
+    );
+    if (!personnel) return { ok: true };
+
+    const conflicts = this.getAbsencesForPeriod(personnel.id, dateDebut, dateFin);
+    if (conflicts.length === 0) return { ok: true };
+
+    return {
+      ok: false,
+      personnel,
+      conflicts
+    };
+  },
+
+  // ============================================================
   // MODELES DE CHANTIER (bibliothèque de fournitures par type)
   // ============================================================
   /**
@@ -826,7 +1104,7 @@ const Store = {
       chantiers: [], clients: [], cotes: [], categoriesCotes: [], fournitures: [],
       stockAtelier: {}, stockCamions: {}, reservations: [], mouvements: [],
       engins: [], reservationsEngins: [], fournisseurs: [], commandes: [], rdvs: [],
-      modeles: [], equipes: [], conducteurs: [], rendezVous: [],
+      modeles: [], equipes: [], conducteurs: [], personnel: [], absences: [], typesAbsence: [], rendezVous: [],
       parametres: { entreprise: { nom: 'Menuiserie SAS' }, theme: 'light' }
     };
     this._notify('store:reset', this.state);
