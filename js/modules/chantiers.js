@@ -268,6 +268,20 @@ const Chantiers = {
         return;
       }
 
+      // Vérification absence (strict)
+      if (formData.conducteurId && formData.dateDebut && formData.dateFin && Store.canAssignToChantier) {
+        const check = Store.canAssignToChantier(formData.conducteurId, formData.dateDebut, formData.dateFin);
+        if (!check.ok) {
+          const fullName = [check.personnel.prenom, check.personnel.nom].filter(Boolean).join(' ') || check.personnel.nom;
+          const conflitsTexte = check.conflicts.map(a => {
+            const t = Store.getTypeAbsence(a.typeId);
+            return `${t.icon} ${t.label} (${Format.dateShort(a.dateDebut)} → ${Format.dateShort(a.dateFin)})`;
+          }).join(', ');
+          Toast.error(`❌ Impossible : ${fullName} est en absence (${conflitsTexte}). Choisissez une autre personne ou modifiez les dates.`);
+          return;
+        }
+      }
+
       if (isEdit) {
         Store.updateChantier(chantier.id, formData);
         Toast.success('Chantier mis à jour');
