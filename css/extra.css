@@ -2283,6 +2283,252 @@ a.btn-icon:hover {
   }
 }
 
+/* ========== PERSONNEL ========== */
+.personnel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--s-4);
+}
+.personnel-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+  cursor: pointer;
+  transition: all var(--t-base);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  position: relative;
+}
+.personnel-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+.personnel-card__top {
+  display: flex;
+  gap: var(--s-3);
+  align-items: center;
+}
+.personnel-card__info {
+  flex: 1;
+  min-width: 0;
+}
+.personnel-card__info h3 {
+  margin: 0 0 4px;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: var(--fs-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.personnel-role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.personnel-status {
+  padding: 6px 10px;
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.personnel-status--absent {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+  font-weight: 600;
+}
+[data-theme="dark"] .personnel-status--absent {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+.personnel-status--upcoming {
+  background: rgba(245, 158, 11, 0.1);
+  color: #92400e;
+  font-size: var(--fs-xs);
+}
+[data-theme="dark"] .personnel-status--upcoming {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+}
+.personnel-card__meta {
+  font-size: var(--fs-sm);
+  color: var(--txt-secondary);
+}
+.personnel-card__meta > div {
+  padding: 2px 0;
+}
+.personnel-card__actions {
+  display: flex;
+  gap: 4px;
+  position: absolute;
+  top: var(--s-3);
+  right: var(--s-3);
+}
+
+/* ========== ABSENCES ========== */
+.absence-types-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--s-2);
+}
+.absence-type-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: var(--s-3);
+  background: var(--bg-sunken);
+  border: 2px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  text-align: center;
+  transition: all var(--t-fast);
+}
+.absence-type-option input {
+  display: none;
+}
+.absence-type-option:hover {
+  border-color: var(--type-color, var(--border-strong));
+  background: var(--bg-hover);
+}
+.absence-type-option.is-selected {
+  border-color: var(--type-color);
+  background: color-mix(in srgb, var(--type-color) 10%, transparent);
+}
+.absence-type-icon {
+  font-size: 28px;
+}
+.absence-type-label {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.absences-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.absence-mini-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 8px 12px;
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+}
+.absence-mini-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-md);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.absence-mini-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.absence-mini-info strong {
+  font-size: var(--fs-sm);
+}
+.absence-mini-info span {
+  font-size: var(--fs-xs);
+  color: var(--txt-muted);
+}
+
+/* Affichage absence dans le calendrier */
+.fc-event.planning-absence {
+  font-weight: 600;
+  border-radius: var(--r-md) !important;
+  border: none !important;
+  padding: 2px 4px;
+}
+
+/* ========== DATE ACTION MENU ========== */
+.date-action-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.date-action-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--t-fast);
+  width: 100%;
+}
+.date-action-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  transform: translateX(2px);
+}
+.date-action-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-md);
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.date-action-btn strong {
+  display: block;
+  font-size: var(--fs-md);
+  font-family: 'Bricolage Grotesque', sans-serif;
+  color: var(--txt-primary);
+}
+.date-action-btn .hint {
+  font-size: var(--fs-xs);
+  color: var(--txt-muted);
+  margin: 0;
+}
+
+/* Checkbox list (form personnel) */
+.checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--s-2);
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: background var(--t-fast);
+}
+.checkbox-row:hover {
+  background: var(--bg-hover);
+}
+.checkbox-row input {
+  cursor: pointer;
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
   .form-grid { grid-template-columns: 1fr; }
