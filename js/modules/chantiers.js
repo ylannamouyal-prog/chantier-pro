@@ -162,6 +162,34 @@ const Chantiers = {
     const data = chantier || { ...prefill };
     const s = Store.state;
 
+    // État du picker d'équipe (snapshot pour ce chantier)
+    const pickerState = {
+      equipeId: null,
+      nom: '',
+      couleur: '#3b82f6',
+      chefId: null,
+      membresIds: []
+    };
+
+    // Hydrate depuis le chantier existant
+    if (data.equipeSnapshot) {
+      pickerState.equipeId = data.equipeId;
+      pickerState.nom = data.equipeSnapshot.nom;
+      pickerState.couleur = data.equipeSnapshot.couleur;
+      pickerState.chefId = data.equipeSnapshot.chefId;
+      pickerState.membresIds = (data.equipeSnapshot.membresIds || []).slice();
+    } else if (data.equipeId) {
+      // Migration : pas de snapshot, on prend la composition actuelle du modèle
+      const eq = s.equipes.find(e => e.id === data.equipeId);
+      if (eq) {
+        pickerState.equipeId = eq.id;
+        pickerState.nom = eq.nom;
+        pickerState.couleur = eq.couleur;
+        pickerState.chefId = eq.chefId || null;
+        pickerState.membresIds = (eq.membresIds || []).slice();
+      }
+    }
+
     const body = el('div');
     body.innerHTML = `
       <div class="form-group">
@@ -204,12 +232,39 @@ const Chantiers = {
             ${s.conducteurs.map(cd => `<option value="${cd.id}" ${data.conducteurId === cd.id ? 'selected' : ''}>${Helpers.esc(cd.nom)}</option>`).join('')}
           </select>
         </div>
-        <div class="form-group">
-          <label class="form-label">Équipe</label>
-          <select class="form-select" id="f-equipe">
-            <option value="">— Aucune —</option>
-            ${s.equipes.map(eq => `<option value="${eq.id}" ${data.equipeId === eq.id ? 'selected' : ''}>${Helpers.esc(eq.nom)}</option>`).join('')}
-          </select>
+      </div>
+
+      <!-- Sélection d'équipe par drag & drop -->
+      <div class="form-group">
+        <label class="form-label">Équipe assignée</label>
+        <div class="equipe-picker" data-equipe-picker>
+          <div class="equipe-picker__cards" id="equipePickerCards"></div>
+          <div class="equipe-picker__hint">Glissez une équipe ci-dessous (ou cliquez puis "Assigner" sur mobile)</div>
+          <div class="equipe-picker__drop" id="equipeDropZone">
+            <div class="equipe-picker__drop-empty">
+              <span class="equipe-picker__drop-icon">⬇</span>
+              <span>Déposez une équipe ici</span>
+            </div>
+            <div class="equipe-picker__drop-filled" hidden>
+              <div class="equipe-picker__selected-head">
+                <span id="equipeSelectedColor" class="color-swatch-lg"></span>
+                <div>
+                  <strong id="equipeSelectedNom"></strong>
+                  <span id="equipeSelectedSpec" class="hint"></span>
+                </div>
+                <button type="button" class="btn-icon btn-icon--danger" id="equipeRemoveBtn" title="Retirer l'équipe">✕</button>
+              </div>
+              <div class="equipe-picker__composition">
+                <div class="equipe-picker__composition-head">
+                  <strong>Composition pour ce chantier</strong>
+                  <button type="button" class="btn btn--ghost btn--sm" id="equipeMembersAddBtn">+ Ajouter un membre</button>
+                </div>
+                <div id="equipeSelectedMembers" class="equipe-picker__members"></div>
+                <p class="hint">Modifications applicables uniquement à ce chantier (ne touche pas le modèle d'équipe).</p>
+              </div>
+            </div>
+          </div>
+          <input type="hidden" id="f-equipe" value="${data.equipeId || ''}">
         </div>
       </div>
 
@@ -252,6 +307,13 @@ const Chantiers = {
         adresse:      $('#f-adresse').value.trim(),
         conducteurId: $('#f-conducteur').value || null,
         equipeId:     $('#f-equipe').value || null,
+        // Snapshot de l'équipe (figée au moment de la création/modif)
+        equipeSnapshot: pickerState.equipeId ? {
+          nom: pickerState.nom,
+          couleur: pickerState.couleur,
+          chefId: pickerState.chefId,
+          membresIds: pickerState.membresIds.slice()
+        } : null,
         dateDebut:    $('#f-debut').value || null,
         dateFin:      $('#f-fin').value || null,
         statut:       $('#f-statut').value,
@@ -282,6 +344,31 @@ const Chantiers = {
         }
       }
 
+      // Vérification conflits sur les membres de l'équipe (strict)
+      if (formData.equipeSnapshot && formData.dateDebut && formData.dateFin) {
+        const allMemberIds = [
+          formData.equipeSnapshot.chefId,
+          ...formData.equipeSnapshot.membresIds
+        ].filter(Boolean);
+        const conflits = [];
+        allMemberIds.forEach(personId => {
+          const check = Store.isPersonAvailable(personId, formData.dateDebut, formData.dateFin, isEdit ? chantier.id : null);
+          if (!check.ok) {
+            const p = Store.state.personnel.find(x => x.id === personId);
+            const fullName = p ? ([p.prenom, p.nom].filter(Boolean).join(' ') || p.nom) : '?';
+            if (check.reason === 'absence') {
+              conflits.push(`${fullName} (${check.type.icon} ${check.type.label})`);
+            } else if (check.reason === 'chantier') {
+              conflits.push(`${fullName} (déjà sur le chantier ${check.chantier.numero})`);
+            }
+          }
+        });
+        if (conflits.length > 0) {
+          Toast.error(`❌ Impossible : conflit avec ${conflits.join(', ')}`);
+          return;
+        }
+      }
+
       if (isEdit) {
         Store.updateChantier(chantier.id, formData);
         Toast.success('Chantier mis à jour');
@@ -299,6 +386,269 @@ const Chantiers = {
       body,
       footer: [cancelBtn, saveBtn],
       size: 'lg'
+    });
+
+    // Initialiser le picker équipe drag & drop
+    this._initEquipePicker(pickerState, chantier ? chantier.id : null);
+  },
+
+  /** Initialise le picker drag & drop d'équipe dans le formulaire chantier */
+  _initEquipePicker(pickerState, currentChantierId) {
+    const cardsEl = document.getElementById('equipePickerCards');
+    const dropZone = document.getElementById('equipeDropZone');
+    const dropEmpty = dropZone?.querySelector('.equipe-picker__drop-empty');
+    const dropFilled = dropZone?.querySelector('.equipe-picker__drop-filled');
+    const hiddenInput = document.getElementById('f-equipe');
+    if (!cardsEl || !dropZone) return;
+
+    const equipes = Store.state.equipes || [];
+
+    // Détecter mobile
+    const isMobile = window.matchMedia('(max-width: 768px)').matches || ('ontouchstart' in window);
+
+    // === Rendu des cards d'équipes disponibles ===
+    const renderCards = () => {
+      cardsEl.innerHTML = equipes.length === 0
+        ? `<p class="hint" style="text-align:center;padding:var(--s-3)">Aucune équipe définie. <a href="#/equipes">Créez-en d'abord</a>.</p>`
+        : equipes.map(eq => {
+            const isSelected = pickerState.equipeId === eq.id;
+            const chefName = eq.chefId ? (Store.state.personnel.find(p => p.id === eq.chefId)?.nom || '?') : null;
+            const membresCount = (eq.membresIds || []).length;
+            return `
+              <div class="equipe-picker-card ${isSelected ? 'is-selected' : ''}"
+                   data-equipe-id="${eq.id}"
+                   ${isMobile ? '' : 'draggable="true"'}
+                   style="border-color:${eq.couleur}">
+                <span class="equipe-picker-card__color" style="background:${eq.couleur}"></span>
+                <div class="equipe-picker-card__info">
+                  <strong>${Helpers.esc(eq.nom)}</strong>
+                  ${eq.specialite ? `<span class="hint">${Helpers.esc(eq.specialite)}</span>` : ''}
+                  <span class="hint">
+                    ${chefName ? `🛠️ ${Helpers.esc(chefName)} · ` : ''}
+                    👥 ${membresCount} membre${membresCount > 1 ? 's' : ''}
+                  </span>
+                </div>
+                ${isMobile ? `<button type="button" class="btn btn--ghost btn--sm" data-assign-equipe="${eq.id}">Assigner</button>` : ''}
+              </div>
+            `;
+          }).join('');
+
+      // Bind drag (desktop) / click (mobile)
+      cardsEl.querySelectorAll('[data-equipe-id]').forEach(card => {
+        if (!isMobile) {
+          card.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('equipe-id', card.dataset.equipeId);
+            e.dataTransfer.effectAllowed = 'copy';
+            card.classList.add('is-dragging');
+          });
+          card.addEventListener('dragend', () => card.classList.remove('is-dragging'));
+        }
+      });
+      cardsEl.querySelectorAll('[data-assign-equipe]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._assignEquipeToPicker(pickerState, btn.dataset.assignEquipe, currentChantierId);
+        });
+      });
+    };
+
+    // === Zone de drop ===
+    if (!isMobile) {
+      dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('is-drag-over');
+      });
+      dropZone.addEventListener('dragleave', () => dropZone.classList.remove('is-drag-over'));
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('is-drag-over');
+        const eqId = e.dataTransfer.getData('equipe-id');
+        if (eqId) this._assignEquipeToPicker(pickerState, eqId, currentChantierId);
+      });
+    }
+
+    // === Bouton retirer ===
+    const removeBtn = document.getElementById('equipeRemoveBtn');
+    removeBtn?.addEventListener('click', () => {
+      pickerState.equipeId = null;
+      pickerState.nom = '';
+      pickerState.chefId = null;
+      pickerState.membresIds = [];
+      hiddenInput.value = '';
+      this._renderEquipePicker(pickerState);
+      renderCards();
+    });
+
+    // === Bouton ajouter membre ===
+    document.getElementById('equipeMembersAddBtn')?.addEventListener('click', () => {
+      this._openAddMemberPicker(pickerState, currentChantierId);
+    });
+
+    // Initial render
+    renderCards();
+    this._renderEquipePicker(pickerState);
+  },
+
+  /** Assigne une équipe au picker (copie sa composition actuelle dans pickerState) */
+  _assignEquipeToPicker(pickerState, equipeId, currentChantierId) {
+    const eq = Store.state.equipes.find(e => e.id === equipeId);
+    if (!eq) return;
+
+    // Récupérer les dates du formulaire
+    const dateDebut = document.getElementById('f-debut')?.value;
+    const dateFin = document.getElementById('f-fin')?.value;
+
+    // Vérifier conflits sur les membres de l'équipe
+    if (dateDebut && dateFin && Store.isPersonAvailable) {
+      const memberIds = [eq.chefId, ...(eq.membresIds || [])].filter(Boolean);
+      const conflits = [];
+      memberIds.forEach(pid => {
+        const check = Store.isPersonAvailable(pid, dateDebut, dateFin, currentChantierId);
+        if (!check.ok) {
+          const p = Store.state.personnel.find(x => x.id === pid);
+          const fullName = p ? ([p.prenom, p.nom].filter(Boolean).join(' ') || p.nom) : '?';
+          if (check.reason === 'absence') conflits.push(`${fullName} (${check.type.icon} ${check.type.label})`);
+          else if (check.reason === 'chantier') conflits.push(`${fullName} (sur ${check.chantier.numero})`);
+        }
+      });
+      if (conflits.length > 0) {
+        Toast.error(`❌ Impossible d'assigner "${eq.nom}" : ${conflits.join(', ')}`);
+        return;
+      }
+    }
+
+    pickerState.equipeId = eq.id;
+    pickerState.nom = eq.nom;
+    pickerState.couleur = eq.couleur;
+    pickerState.chefId = eq.chefId || null;
+    pickerState.membresIds = (eq.membresIds || []).slice();
+    document.getElementById('f-equipe').value = eq.id;
+    this._renderEquipePicker(pickerState);
+    // Mettre à jour les cards (state selected)
+    document.getElementById('equipePickerCards')?.querySelectorAll('[data-equipe-id]').forEach(c => {
+      c.classList.toggle('is-selected', c.dataset.equipeId === eq.id);
+    });
+    Toast.success(`Équipe ${eq.nom} assignée`);
+  },
+
+  /** Affiche la zone "équipe sélectionnée" avec sa composition */
+  _renderEquipePicker(pickerState) {
+    const dropEmpty = document.querySelector('.equipe-picker__drop-empty');
+    const dropFilled = document.querySelector('.equipe-picker__drop-filled');
+    if (!dropEmpty || !dropFilled) return;
+
+    if (!pickerState.equipeId) {
+      dropEmpty.hidden = false;
+      dropFilled.hidden = true;
+      return;
+    }
+    dropEmpty.hidden = true;
+    dropFilled.hidden = false;
+
+    document.getElementById('equipeSelectedColor').style.background = pickerState.couleur;
+    document.getElementById('equipeSelectedNom').textContent = pickerState.nom;
+
+    const chef = pickerState.chefId ? Store.state.personnel.find(p => p.id === pickerState.chefId) : null;
+    const membres = pickerState.membresIds
+      .map(id => Store.state.personnel.find(p => p.id === id))
+      .filter(Boolean);
+
+    const renderMember = (p, isChef) => {
+      const fullName = [p.prenom, p.nom].filter(Boolean).join(' ') || p.nom;
+      const roleIcon = isChef ? '🛠️' : (p.role === 'alternant' ? '🎓' : '👷');
+      return `
+        <div class="equipe-picker__member" data-member-id="${p.id}" data-is-chef="${isChef ? '1' : '0'}">
+          ${UI.avatar(fullName, 'sm', p.couleur)}
+          <span class="equipe-picker__member-name">${roleIcon} ${Helpers.esc(fullName)}</span>
+          ${isChef ? '<span class="badge badge--info">Chef</span>' : ''}
+          <button type="button" class="btn-icon btn-icon--danger equipe-picker__member-remove" title="Retirer de ce chantier">✕</button>
+        </div>
+      `;
+    };
+
+    const html = (chef ? renderMember(chef, true) : '') +
+                 membres.map(m => renderMember(m, false)).join('');
+
+    const container = document.getElementById('equipeSelectedMembers');
+    container.innerHTML = html || '<p class="hint">Aucun membre. Cliquez sur "+ Ajouter un membre".</p>';
+
+    // Bind retrait
+    container.querySelectorAll('.equipe-picker__member-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const member = btn.closest('.equipe-picker__member');
+        const memberId = member.dataset.memberId;
+        const isChef = member.dataset.isChef === '1';
+        if (isChef) pickerState.chefId = null;
+        else pickerState.membresIds = pickerState.membresIds.filter(id => id !== memberId);
+        this._renderEquipePicker(pickerState);
+      });
+    });
+  },
+
+  /** Ouvre un mini-picker pour ajouter un membre ponctuel au snapshot */
+  _openAddMemberPicker(pickerState, currentChantierId) {
+    const dateDebut = document.getElementById('f-debut')?.value;
+    const dateFin = document.getElementById('f-fin')?.value;
+    const alreadyIn = new Set([pickerState.chefId, ...pickerState.membresIds].filter(Boolean));
+
+    // Personnel disponible : pas déjà dans l'équipe + actif
+    const personnel = (Store.state.personnel || []).filter(p =>
+      p.actif !== false && !alreadyIn.has(p.id)
+    );
+
+    // Marquer les indisponibles
+    const personnelWithStatus = personnel.map(p => {
+      let disponible = true;
+      let reason = '';
+      if (dateDebut && dateFin && Store.isPersonAvailable) {
+        const check = Store.isPersonAvailable(p.id, dateDebut, dateFin, currentChantierId);
+        if (!check.ok) {
+          disponible = false;
+          if (check.reason === 'absence') reason = `${check.type.icon} ${check.type.label}`;
+          else if (check.reason === 'chantier') reason = `Sur ${check.chantier.numero}`;
+        }
+      }
+      return { p, disponible, reason };
+    });
+
+    Modal.open({
+      title: 'Ajouter un membre à ce chantier',
+      size: 'medium',
+      body: `
+        ${dateDebut && dateFin ? `<p class="hint">Période : ${Format.dateShort(dateDebut)} → ${Format.dateShort(dateFin)}</p>` : ''}
+        <div class="picker-personnel-list">
+          ${personnelWithStatus.length === 0 ? '<p class="hint">Aucune personne disponible à ajouter.</p>' :
+            personnelWithStatus.map(({ p, disponible, reason }) => {
+              const fullName = [p.prenom, p.nom].filter(Boolean).join(' ') || p.nom;
+              const role = { conducteur: '👤', chef: '🛠️', ouvrier: '👷', alternant: '🎓' }[p.role] || '👥';
+              return `
+                <div class="picker-personnel-row ${disponible ? '' : 'is-unavailable'}" data-add-person="${p.id}">
+                  ${UI.avatar(fullName, 'sm', p.couleur)}
+                  <div class="picker-personnel-info">
+                    <strong>${role} ${Helpers.esc(fullName)}</strong>
+                    ${!disponible ? `<span class="hint" style="color:#ef4444">❌ ${Helpers.esc(reason)}</span>` : `<span class="hint">${(p.role === 'alternant' ? 'Alternant' : (p.role === 'chef' ? 'Chef' : 'Ouvrier'))}</span>`}
+                  </div>
+                  ${disponible ? '<button type="button" class="btn btn--primary btn--sm">+ Ajouter</button>' : '<button type="button" class="btn btn--ghost btn--sm" disabled>Indisponible</button>'}
+                </div>
+              `;
+            }).join('')
+          }
+        </div>
+      `,
+      footer: `<button class="btn btn--ghost" onclick="Modal.close()">Fermer</button>`,
+      onOpen: () => {
+        document.querySelectorAll('[data-add-person]').forEach(row => {
+          if (row.classList.contains('is-unavailable')) return;
+          row.querySelector('button')?.addEventListener('click', () => {
+            const pid = row.dataset.addPerson;
+            if (!pickerState.membresIds.includes(pid)) pickerState.membresIds.push(pid);
+            Toast.success('Membre ajouté');
+            Modal.close();
+            this._renderEquipePicker(pickerState);
+          });
+        });
+      }
     });
   },
 
