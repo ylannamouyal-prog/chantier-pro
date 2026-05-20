@@ -144,6 +144,8 @@ const Store = {
       email: '',
       adresse: '',
       notes: '',
+      role: '',          // rôle du contact principal (ex: Directeur)
+      contacts: [],      // contacts secondaires : [{id, nom, role, telephone, email, afficherPdf}]
       ...data,
       createdAt: new Date().toISOString()
     };
@@ -162,6 +164,91 @@ const Store = {
     this.commit('client:delete', s => {
       s.clients = s.clients.filter(c => c.id !== id);
     });
+  },
+
+  // ============================================================
+  // CONTACTS SECONDAIRES D'UN CLIENT
+  // ============================================================
+  addContactToClient(clientId, contactData) {
+    const id = Helpers.uid('ct_');
+    const contact = {
+      id,
+      nom: '',
+      role: '',
+      telephone: '',
+      email: '',
+      afficherPdf: false,
+      ...contactData
+    };
+    this.commit('client:addContact', s => {
+      const c = s.clients.find(x => x.id === clientId);
+      if (!c) return;
+      if (!c.contacts) c.contacts = [];
+      c.contacts.push(contact);
+    });
+    return contact;
+  },
+
+  updateContactInClient(clientId, contactId, patch) {
+    this.commit('client:updateContact', s => {
+      const c = s.clients.find(x => x.id === clientId);
+      if (!c || !c.contacts) return;
+      const ct = c.contacts.find(x => x.id === contactId);
+      if (ct) Object.assign(ct, patch);
+    });
+  },
+
+  deleteContactFromClient(clientId, contactId) {
+    this.commit('client:deleteContact', s => {
+      const c = s.clients.find(x => x.id === clientId);
+      if (!c || !c.contacts) return;
+      c.contacts = c.contacts.filter(x => x.id !== contactId);
+    });
+  },
+
+  /** Promeut un contact secondaire au rang de contact principal (échange avec l'actuel principal) */
+  promoteContactToPrincipal(clientId, contactId) {
+    this.commit('client:promoteContact', s => {
+      const c = s.clients.find(x => x.id === clientId);
+      if (!c || !c.contacts) return;
+      const ct = c.contacts.find(x => x.id === contactId);
+      if (!ct) return;
+      // L'ancien principal devient un contact secondaire
+      const ancienPrincipal = {
+        id: Helpers.uid('ct_'),
+        nom: c.nom,
+        role: c.role || '',
+        telephone: c.telephone || '',
+        email: c.email || '',
+        afficherPdf: false
+      };
+      // Nouveau principal = ce contact
+      c.nom = ct.nom;
+      c.role = ct.role || '';
+      c.telephone = ct.telephone || '';
+      c.email = ct.email || '';
+      // Retire l'ancien contact de la liste et ajoute l'ex-principal
+      c.contacts = c.contacts.filter(x => x.id !== contactId);
+      if (ancienPrincipal.nom || ancienPrincipal.telephone || ancienPrincipal.email) {
+        c.contacts.push(ancienPrincipal);
+      }
+    });
+  },
+
+  /** Retourne tous les contacts d'un client (principal en premier) */
+  getAllContacts(clientId) {
+    const c = this.state.clients.find(x => x.id === clientId);
+    if (!c) return [];
+    const principal = {
+      id: '__principal__',
+      nom: c.nom,
+      role: c.role || '',
+      telephone: c.telephone || '',
+      email: c.email || '',
+      afficherPdf: true,
+      isPrincipal: true
+    };
+    return [principal, ...(c.contacts || [])];
   },
 
   getClient(id) {
