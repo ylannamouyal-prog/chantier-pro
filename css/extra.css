@@ -2914,6 +2914,37 @@ a.btn-icon:hover {
   }
 }
 
+/* ========== POPOVER AJOUT MEMBRE INLINE ========== */
+.add-member-popover {
+  margin-top: var(--s-3);
+  padding: var(--s-3);
+  background: var(--bg-elevated);
+  border: 2px solid #3b82f6;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  animation: popoverIn 0.18s ease-out;
+}
+@keyframes popoverIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.add-member-popover__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--s-2);
+  margin-bottom: var(--s-2);
+  border-bottom: 1px solid var(--border);
+}
+.add-member-popover__header strong {
+  font-size: var(--fs-sm);
+  font-family: 'Bricolage Grotesque', sans-serif;
+}
+.add-member-popover .picker-personnel-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
   .form-grid { grid-template-columns: 1fr; }
