@@ -134,10 +134,44 @@ window.PdfExport = (function () {
       doc.text(client.nom, margin + 3, yc);
       doc.setFont('helvetica', 'normal');
       yc += 5;
+      if (client.role) {
+        doc.setFontSize(9);
+        doc.setTextColor(100, 116, 139);
+        doc.text(client.role, margin + 3, yc); yc += 4;
+        doc.setFontSize(10);
+        doc.setTextColor(15, 23, 42);
+      }
       if (client.adresse) { doc.text(client.adresse, margin + 3, yc); yc += 4; }
       const cityLine = [client.codePostal, client.ville].filter(Boolean).join(' ');
       if (cityLine) { doc.text(cityLine, margin + 3, yc); yc += 4; }
       if (client.telephone) { doc.text('Tél : ' + client.telephone, margin + 3, yc); yc += 4; }
+      if (client.email) { doc.text('Email : ' + client.email, margin + 3, yc); yc += 4; }
+
+      // Contacts secondaires marqués afficherPdf
+      const contactsPdf = (client.contacts || []).filter(ct => ct.afficherPdf);
+      if (contactsPdf.length > 0) {
+        yc += 2;
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(100, 116, 139);
+        doc.text('Autres contacts :', margin + 3, yc); yc += 4;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        contactsPdf.forEach(ct => {
+          const line1 = ct.nom + (ct.role ? ' — ' + ct.role : '');
+          doc.text(line1, margin + 3, yc); yc += 3.5;
+          const contactInfos = [];
+          if (ct.telephone) contactInfos.push('☎ ' + ct.telephone);
+          if (ct.email) contactInfos.push('✉ ' + ct.email);
+          if (contactInfos.length > 0) {
+            doc.setFontSize(8);
+            doc.setTextColor(100, 116, 139);
+            doc.text(contactInfos.join('  ·  '), margin + 3, yc); yc += 4;
+            doc.setFontSize(10);
+            doc.setTextColor(15, 23, 42);
+          }
+        });
+      }
     }
 
     let yr = y + 12;
