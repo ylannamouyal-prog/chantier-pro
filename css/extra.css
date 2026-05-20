@@ -2725,6 +2725,195 @@ a.btn-icon:hover {
   }
 }
 
+/* ========== DRAG & DROP ÉQUIPE (formulaire chantier) ========== */
+.equipe-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.equipe-picker__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--s-2);
+}
+.equipe-picker-card {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  background: var(--bg-elevated);
+  border: 2px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: grab;
+  transition: all var(--t-fast);
+  user-select: none;
+}
+.equipe-picker-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+.equipe-picker-card:active {
+  cursor: grabbing;
+}
+.equipe-picker-card.is-dragging {
+  opacity: 0.5;
+}
+.equipe-picker-card.is-selected {
+  background: color-mix(in srgb, var(--accent, #3b82f6) 8%, var(--bg-elevated));
+  border-color: var(--accent, #3b82f6);
+}
+.equipe-picker-card__color {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  flex-shrink: 0;
+}
+.equipe-picker-card__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.equipe-picker-card__info strong {
+  font-size: var(--fs-sm);
+  font-family: 'Bricolage Grotesque', sans-serif;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.equipe-picker-card__info .hint {
+  font-size: var(--fs-xs);
+}
+
+.equipe-picker__hint {
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--txt-muted);
+  font-style: italic;
+}
+
+.equipe-picker__drop {
+  border: 2px dashed var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-3);
+  background: var(--bg-sunken);
+  min-height: 120px;
+  transition: all var(--t-fast);
+}
+.equipe-picker__drop.is-drag-over {
+  border-color: #3b82f6;
+  background: color-mix(in srgb, #3b82f6 8%, var(--bg-sunken));
+}
+
+.equipe-picker__drop-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  color: var(--txt-muted);
+}
+.equipe-picker__drop-icon {
+  font-size: 28px;
+  animation: bounceDown 1.5s ease-in-out infinite;
+}
+@keyframes bounceDown {
+  0%, 100% { transform: translateY(0); opacity: 0.6; }
+  50% { transform: translateY(6px); opacity: 1; }
+}
+
+.equipe-picker__selected-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--s-3);
+}
+.equipe-picker__selected-head strong {
+  display: block;
+  font-size: var(--fs-md);
+  font-family: 'Bricolage Grotesque', sans-serif;
+}
+.equipe-picker__selected-head > div:nth-child(2) {
+  flex: 1;
+}
+
+.equipe-picker__composition-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--s-2);
+}
+.equipe-picker__composition-head strong {
+  font-size: var(--fs-sm);
+  color: var(--txt-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.equipe-picker__members {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.equipe-picker__member {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.equipe-picker__member-name {
+  flex: 1;
+  font-size: var(--fs-sm);
+}
+
+/* Picker ajout membre */
+.picker-personnel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.picker-personnel-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 8px 12px;
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+  transition: background var(--t-fast);
+}
+.picker-personnel-row:hover {
+  background: var(--bg-hover);
+}
+.picker-personnel-row.is-unavailable {
+  opacity: 0.5;
+}
+.picker-personnel-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.picker-personnel-info strong {
+  font-size: var(--fs-sm);
+}
+
+@media (max-width: 768px) {
+  .equipe-picker__cards {
+    grid-template-columns: 1fr;
+  }
+  .equipe-picker-card {
+    cursor: pointer;
+  }
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
   .form-grid { grid-template-columns: 1fr; }
