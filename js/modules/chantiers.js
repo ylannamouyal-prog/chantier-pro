@@ -588,6 +588,10 @@ const Chantiers = {
 
   /** Ouvre un mini-picker pour ajouter un membre ponctuel au snapshot */
   _openAddMemberPicker(pickerState, currentChantierId) {
+    // Si un popover existe déjà, on le ferme et on sort
+    const existing = document.getElementById('addMemberPopover');
+    if (existing) { existing.remove(); return; }
+
     const dateDebut = document.getElementById('f-debut')?.value;
     const dateFin = document.getElementById('f-fin')?.value;
     const alreadyIn = new Set([pickerState.chefId, ...pickerState.membresIds].filter(Boolean));
@@ -612,43 +616,71 @@ const Chantiers = {
       return { p, disponible, reason };
     });
 
-    Modal.open({
-      title: 'Ajouter un membre à ce chantier',
-      size: 'medium',
-      body: `
-        ${dateDebut && dateFin ? `<p class="hint">Période : ${Format.dateShort(dateDebut)} → ${Format.dateShort(dateFin)}</p>` : ''}
-        <div class="picker-personnel-list">
-          ${personnelWithStatus.length === 0 ? '<p class="hint">Aucune personne disponible à ajouter.</p>' :
-            personnelWithStatus.map(({ p, disponible, reason }) => {
-              const fullName = [p.prenom, p.nom].filter(Boolean).join(' ') || p.nom;
-              const role = { conducteur: '👤', chef: '🛠️', ouvrier: '👷', alternant: '🎓' }[p.role] || '👥';
-              return `
-                <div class="picker-personnel-row ${disponible ? '' : 'is-unavailable'}" data-add-person="${p.id}">
-                  ${UI.avatar(fullName, 'sm', p.couleur)}
-                  <div class="picker-personnel-info">
-                    <strong>${role} ${Helpers.esc(fullName)}</strong>
-                    ${!disponible ? `<span class="hint" style="color:#ef4444">❌ ${Helpers.esc(reason)}</span>` : `<span class="hint">${(p.role === 'alternant' ? 'Alternant' : (p.role === 'chef' ? 'Chef' : 'Ouvrier'))}</span>`}
-                  </div>
-                  ${disponible ? '<button type="button" class="btn btn--primary btn--sm">+ Ajouter</button>' : '<button type="button" class="btn btn--ghost btn--sm" disabled>Indisponible</button>'}
+    // Création du popover inline
+    const popover = document.createElement('div');
+    popover.id = 'addMemberPopover';
+    popover.className = 'add-member-popover';
+    popover.innerHTML = `
+      <div class="add-member-popover__header">
+        <strong>Ajouter un membre à ce chantier</strong>
+        <button type="button" class="btn-icon" id="closeAddMemberPopover" title="Fermer">✕</button>
+      </div>
+      ${dateDebut && dateFin ? `<p class="hint" style="margin:0 0 var(--s-2)">Période : ${Format.dateShort(dateDebut)} → ${Format.dateShort(dateFin)}</p>` : ''}
+      <div class="picker-personnel-list">
+        ${personnelWithStatus.length === 0 ? '<p class="hint">Aucune personne disponible à ajouter.</p>' :
+          personnelWithStatus.map(({ p, disponible, reason }) => {
+            const fullName = [p.prenom, p.nom].filter(Boolean).join(' ') || p.nom;
+            const role = { conducteur: '👤', chef: '🛠️', ouvrier: '👷', alternant: '🎓' }[p.role] || '👥';
+            return `
+              <div class="picker-personnel-row ${disponible ? '' : 'is-unavailable'}" data-add-person="${p.id}">
+                ${UI.avatar(fullName, 'sm', p.couleur)}
+                <div class="picker-personnel-info">
+                  <strong>${role} ${Helpers.esc(fullName)}</strong>
+                  ${!disponible ? `<span class="hint" style="color:#ef4444">❌ ${Helpers.esc(reason)}</span>` : `<span class="hint">${(p.role === 'alternant' ? 'Alternant' : (p.role === 'chef' ? 'Chef' : 'Ouvrier'))}</span>`}
                 </div>
-              `;
-            }).join('')
-          }
-        </div>
-      `,
-      footer: `<button class="btn btn--ghost" onclick="Modal.close()">Fermer</button>`,
-      onOpen: () => {
-        document.querySelectorAll('[data-add-person]').forEach(row => {
-          if (row.classList.contains('is-unavailable')) return;
-          row.querySelector('button')?.addEventListener('click', () => {
-            const pid = row.dataset.addPerson;
-            if (!pickerState.membresIds.includes(pid)) pickerState.membresIds.push(pid);
-            Toast.success('Membre ajouté');
-            Modal.close();
-            this._renderEquipePicker(pickerState);
-          });
-        });
-      }
+                ${disponible ? '<button type="button" class="btn btn--primary btn--sm">+ Ajouter</button>' : '<button type="button" class="btn btn--ghost btn--sm" disabled>Indisponible</button>'}
+              </div>
+            `;
+          }).join('')
+        }
+      </div>
+    `;
+
+    // Insérer le popover juste après la zone de composition
+    const composition = document.querySelector('.equipe-picker__composition');
+    if (composition) {
+      composition.appendChild(popover);
+    } else {
+      document.body.appendChild(popover);
+    }
+
+    // Fermer en cliquant sur le X
+    popover.querySelector('#closeAddMemberPopover')?.addEventListener('click', () => {
+      popover.remove();
+    });
+
+    // Cliquer en dehors ferme aussi
+    setTimeout(() => {
+      const onClickOutside = (e) => {
+        if (!popover.contains(e.target) && !e.target.closest('#equipeMembersAddBtn')) {
+          popover.remove();
+          document.removeEventListener('click', onClickOutside);
+        }
+      };
+      document.addEventListener('click', onClickOutside);
+    }, 0);
+
+    // Clic sur "+ Ajouter" pour chaque ligne
+    popover.querySelectorAll('[data-add-person]').forEach(row => {
+      if (row.classList.contains('is-unavailable')) return;
+      row.querySelector('button')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const pid = row.dataset.addPerson;
+        if (!pickerState.membresIds.includes(pid)) pickerState.membresIds.push(pid);
+        Toast.success('Membre ajouté');
+        popover.remove();
+        this._renderEquipePicker(pickerState);
+      });
     });
   },
 
