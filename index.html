@@ -142,10 +142,13 @@
           <button class="btn btn--ghost" id="quickAddBtn" title="Création rapide">
             <span class="btn-icon">+</span><span class="btn-text">Nouveau</span>
           </button>
-          <button class="icon-btn" id="notifBtn" title="Notifications">
-            <span>◔</span>
-            <span class="notif-dot"></span>
-          </button>
+          <div class="notif-wrap">
+            <button class="icon-btn" id="notifBtn" title="Notifications">
+              <span class="notif-icon">✉</span>
+              <span class="notif-badge" id="notifBadge" hidden>0</span>
+            </button>
+            <div class="notif-panel" id="notifPanel" hidden></div>
+          </div>
         </div>
       </header>
 
@@ -228,6 +231,7 @@
   <script src="js/modules/pdf-export.js"></script>
   <script src="js/modules/excel-export.js"></script>
   <script src="js/modules/search.js"></script>
+  <script src="js/modules/notifications.js"></script>
 
   <script src="js/app.js"></script>
 </body>
