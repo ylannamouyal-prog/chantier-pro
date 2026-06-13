@@ -593,5 +593,45 @@ ${c.notes || ''}`;
     });
   }
 
-  return { render, _add: () => openForm(), _delete, _edit, _setStatut, _pdf, _copy, openForm };
+  return { render, _add: () => openForm(), _delete, _edit, _setStatut, _pdf, _copy, openForm, openFormForFourniture };
+
+  /** Ouvre le formulaire de commande pré-rempli pour réapprovisionner une fourniture */
+  function openFormForFourniture(fournitureId) {
+    const info = Store.getReapproInfo
+      ? Store.getReapproInfo(fournitureId)
+      : null;
+    const f = Store.state.fournitures.find(x => x.id === fournitureId);
+    if (!f) { openForm(); return; }
+
+    const fournisseur = info?.fournisseur ||
+      Store.state.fournisseurs.find(fr => !fr.categorie || !f.categorie || fr.categorie === f.categorie) ||
+      Store.state.fournisseurs[0];
+
+    const total = Store.getStockTotal(f.id).total;
+    const aCommander = Math.max((f.seuilAlerte || 5) * 3 - total, (f.seuilAlerte || 5));
+
+    const today = new Date();
+    const delai = fournisseur?.delaiLivraison || 5;
+    const livraison = new Date(today);
+    livraison.setDate(livraison.getDate() + delai);
+
+    const prefill = {
+      dateCommande: today.toISOString().split('T')[0],
+      dateLivraisonPrevue: livraison.toISOString().split('T')[0],
+      fournisseurId: fournisseur?.id || '',
+      chantierId: null,
+      conducteurId: null,
+      statut: 'a-passer',
+      motif: 'reappro',
+      notes: '',
+      lignes: [{
+        fournitureId: f.id,
+        designation: f.nom,
+        quantite: aCommander,
+        prixUnitaire: f.prixUnitaire || 0,
+        unite: f.unite || 'pcs'
+      }]
+    };
+    openForm(null, prefill);
+  }
 })();
