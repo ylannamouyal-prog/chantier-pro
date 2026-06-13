@@ -726,6 +726,167 @@ const Store = {
   },
 
   // ============================================================
+  // NOTIFICATIONS & RÉAPPROVISIONNEMENT
+  // ============================================================
+  /**
+   * Calcule la date à laquelle il faut commander une fourniture
+   * pour ne pas tomber en rupture (en tenant compte du délai fournisseur).
+   * Logique simple : si le stock est déjà sous le seuil, il faut commander
+   * aujourd'hui. La "date limite de commande" = aujourd'hui (urgent).
+   * Retourne { fourniture, fournisseur, delai, dateLimiteCommande, total, seuil } ou null.
+   */
+  getReapproInfo(fournitureId) {
+    const f = this.state.fournitures.find(x => x.id === fournitureId);
+    if (!f) return null;
+    const total = this.getStockTotal(f.id).total;
+    const seuil = f.seuilAlerte || 0;
+    if (total > seuil) return null; // pas besoin de réappro
+
+    const candidats = this.state.fournisseurs.filter(fr =>
+      !fr.categorie || !f.categorie || fr.categorie === f.categorie
+    );
+    const fournisseur = candidats[0] || this.state.fournisseurs[0];
+    const delai = fournisseur?.delaiLivraison || 5;
+
+    // Date limite : il faut commander maintenant (stock déjà bas)
+    const today = new Date();
+    return {
+      fourniture: f,
+      fournisseur,
+      delai,
+      dateLimiteCommande: today.toISOString().split('T')[0],
+      total,
+      seuil,
+      isRupture: total === 0
+    };
+  },
+
+  /** Liste de toutes les fournitures nécessitant un réappro */
+  getAllReapproNeeded() {
+    return this.state.fournitures
+      .map(f => this.getReapproInfo(f.id))
+      .filter(Boolean);
+  },
+
+  /**
+   * Génère toutes les notifications à venir dans les N prochains jours.
+   * Retourne un tableau trié par date : [{ type, date, isToday, isTomorrow, title, subtitle, icon, color, action }]
+   */
+  getNotifications(daysAhead = 7) {
+    const notifs = [];
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const horizon = new Date(now);
+    horizon.setDate(horizon.getDate() + daysAhead);
+
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const isSameDay = (d1, d2) =>
+      d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate();
+
+    // 1) Chantiers qui démarrent
+    (this.state.chantiers || []).forEach(c => {
+      if (!c.dateDebut) return;
+      const d = new Date(c.dateDebut);
+      d.setHours(0, 0, 0, 0);
+      if (d >= now && d <= horizon) {
+        notifs.push({
+          type: 'chantier',
+          date: c.dateDebut,
+          dateObj: d,
+          isToday: isSameDay(d, now),
+          isTomorrow: isSameDay(d, tomorrow),
+          icon: '🏗️',
+          color: '#3b82f6',
+          title: `Démarrage chantier ${c.numero}`,
+          subtitle: c.titre || '',
+          action: { kind: 'chantier', id: c.id }
+        });
+      }
+    });
+
+    // 2) Réapprovisionnements nécessaires
+    this.getAllReapproNeeded().forEach(info => {
+      notifs.push({
+        type: 'reappro',
+        date: now.toISOString().split('T')[0],
+        dateObj: now,
+        isToday: true,
+        isTomorrow: false,
+        icon: '📦',
+        color: info.isRupture ? '#ef4444' : '#f59e0b',
+        title: info.isRupture
+          ? `RUPTURE : ${info.fourniture.nom}`
+          : `Stock bas : ${info.fourniture.nom}`,
+        subtitle: `${info.total} en stock (seuil ${info.seuil})${info.fournisseur ? ' · délai ' + info.delai + 'j' : ''}`,
+        action: { kind: 'reappro', id: info.fourniture.id }
+      });
+    });
+
+    // 3) Absences qui commencent
+    (this.state.absences || []).forEach(a => {
+      const d = new Date(a.dateDebut);
+      d.setHours(0, 0, 0, 0);
+      if (d >= now && d <= horizon) {
+        const p = (this.state.personnel || []).find(x => x.id === a.personnelId);
+        if (!p) return;
+        const type = this.getTypeAbsence(a.typeId);
+        const fullName = [p.prenom, p.nom].filter(Boolean).join(' ') || p.nom;
+        const isAlternant = p.role === 'alternant';
+        notifs.push({
+          type: isAlternant ? 'alternant' : 'absence',
+          date: a.dateDebut,
+          dateObj: d,
+          isToday: isSameDay(d, now),
+          isTomorrow: isSameDay(d, tomorrow),
+          icon: isAlternant ? '🎓' : type.icon,
+          color: type.couleur,
+          title: isAlternant
+            ? `${fullName} (alternant) absent`
+            : `${fullName} — ${type.label}`,
+          subtitle: `Du ${this._formatDateFr(a.dateDebut)} au ${this._formatDateFr(a.dateFin)}`,
+          action: { kind: 'absence', id: a.id }
+        });
+      }
+    });
+
+    // 4) Livraisons de commandes prévues
+    (this.state.commandes || []).forEach(c => {
+      if (!c.dateLivraisonPrevue || c.statut === 'livree' || c.statut === 'annulee') return;
+      const d = new Date(c.dateLivraisonPrevue);
+      d.setHours(0, 0, 0, 0);
+      if (d >= now && d <= horizon) {
+        const fournisseur = this.state.fournisseurs.find(f => f.id === c.fournisseurId);
+        notifs.push({
+          type: 'livraison',
+          date: c.dateLivraisonPrevue,
+          dateObj: d,
+          isToday: isSameDay(d, now),
+          isTomorrow: isSameDay(d, tomorrow),
+          icon: '🚚',
+          color: '#06b6d4',
+          title: `Livraison ${c.numero}`,
+          subtitle: fournisseur ? fournisseur.nom : '',
+          action: { kind: 'commande', id: c.id }
+        });
+      }
+    });
+
+    // Tri par date croissante, puis demain/aujourd'hui en avant
+    notifs.sort((a, b) => a.dateObj - b.dateObj);
+    return notifs;
+  },
+
+  _formatDateFr(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+  },
+
+  // ============================================================
   // RENDEZ-VOUS (rdvs)
   // ============================================================
   /**
