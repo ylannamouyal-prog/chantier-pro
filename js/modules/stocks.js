@@ -12,7 +12,8 @@ window.Stocks = (function () {
         </div>
         <div class="view-header__actions">
           <button class="btn btn--ghost" id="stkMvt">📋 Mouvements</button>
-          <button class="btn btn--ghost" id="stkExcel">📊 Excel</button>
+          <button class="btn btn--ghost" id="stkExportMvt">📥 Exporter mouvements</button>
+          <button class="btn btn--ghost" id="stkExportEtat">📄 État du stock (PDF)</button>
           <button class="btn btn--primary" id="stkAdd">+ Nouvelle fourniture</button>
         </div>
       </div>
@@ -36,7 +37,8 @@ window.Stocks = (function () {
 
     document.getElementById('stkAdd')?.addEventListener('click', openAddFourniture);
     document.getElementById('stkMvt')?.addEventListener('click', openMouvements);
-    document.getElementById('stkExcel')?.addEventListener('click', () => window.ExcelExport?.stocks());
+    document.getElementById('stkExportMvt')?.addEventListener('click', openExportMouvements);
+    document.getElementById('stkExportEtat')?.addEventListener('click', () => window.PdfExport?.stockEtat());
 
     container.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
@@ -414,6 +416,105 @@ window.Stocks = (function () {
         </table>
       `,
       footer: `<button class="btn btn--primary" onclick="Modal.close()">Fermer</button>`
+    });
+  }
+
+  // ============================================================
+  // EXPORT MOUVEMENTS (choix période + format)
+  // ============================================================
+  function openExportMouvements() {
+    const mvts = Store.state.mouvements || [];
+    // Années disponibles
+    const annees = [...new Set(mvts.map(m => new Date(m.date).getFullYear()))].sort((a, b) => b - a);
+    const currentYear = new Date().getFullYear();
+    if (!annees.includes(currentYear)) annees.unshift(currentYear);
+
+    const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+    Modal.open({
+      title: '📥 Exporter les mouvements',
+      size: 'medium',
+      body: `
+        <div class="form-grid">
+          <div class="form-field form-field--full">
+            <label>Période</label>
+            <select id="exp_periode" class="form-select">
+              <option value="all">Tous les mouvements</option>
+              <option value="year">Une année entière</option>
+              <option value="month" selected>Un mois précis</option>
+            </select>
+          </div>
+
+          <div class="form-field" id="exp_year_wrap">
+            <label>Année</label>
+            <select id="exp_year" class="form-select">
+              ${annees.map(a => `<option value="${a}" ${a === currentYear ? 'selected' : ''}>${a}</option>`).join('')}
+            </select>
+          </div>
+
+          <div class="form-field" id="exp_month_wrap">
+            <label>Mois</label>
+            <select id="exp_month" class="form-select">
+              ${MOIS.map((m, i) => `<option value="${i}" ${i === new Date().getMonth() ? 'selected' : ''}>${m}</option>`).join('')}
+            </select>
+          </div>
+
+          <div class="form-field form-field--full">
+            <label>Format</label>
+            <div class="export-format-choice">
+              <label class="export-format-option">
+                <input type="radio" name="exp_format" value="pdf" checked>
+                <span class="export-format-icon">📄</span>
+                <span>PDF</span>
+              </label>
+              <label class="export-format-option">
+                <input type="radio" name="exp_format" value="excel">
+                <span class="export-format-icon">📊</span>
+                <span>Excel</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>
+        <button class="btn btn--primary" id="exp_go">Télécharger</button>
+      `,
+      onOpen: () => {
+        const periodeSelect = document.getElementById('exp_periode');
+        const yearWrap = document.getElementById('exp_year_wrap');
+        const monthWrap = document.getElementById('exp_month_wrap');
+
+        const updateVisibility = () => {
+          const v = periodeSelect.value;
+          yearWrap.style.display = (v === 'year' || v === 'month') ? '' : 'none';
+          monthWrap.style.display = (v === 'month') ? '' : 'none';
+        };
+        periodeSelect.addEventListener('change', updateVisibility);
+        updateVisibility();
+
+        document.getElementById('exp_go').addEventListener('click', () => {
+          const periode = periodeSelect.value;
+          const format = document.querySelector('input[name="exp_format"]:checked').value;
+          let filter = null;
+
+          if (periode === 'year') {
+            filter = { year: parseInt(document.getElementById('exp_year').value) };
+          } else if (periode === 'month') {
+            filter = {
+              year: parseInt(document.getElementById('exp_year').value),
+              month: parseInt(document.getElementById('exp_month').value)
+            };
+          }
+
+          Modal.close();
+          if (format === 'pdf') {
+            window.PdfExport?.mouvements(filter);
+          } else {
+            window.ExcelExport?.mouvements(filter);
+          }
+        });
+      }
     });
   }
 
