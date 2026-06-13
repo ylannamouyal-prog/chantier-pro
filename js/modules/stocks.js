@@ -26,6 +26,9 @@ window.Stocks = (function () {
             🚚 ${Helpers.esc(eq.nom)}
           </button>
         `).join('')}
+        <button class="tab ${activeTab === 'commandes-chantier' ? 'tab--active' : ''}" data-tab="commandes-chantier">
+          🏗️ Commandes chantier
+        </button>
       </div>
 
       <div class="filters">
@@ -62,6 +65,12 @@ window.Stocks = (function () {
   function renderContent() {
     const content = document.getElementById('stockContent');
     if (!content) return;
+
+    // Onglet spécial : commandes chantier
+    if (activeTab === 'commandes-chantier') {
+      renderCommandesChantier(content);
+      return;
+    }
 
     const fournitures = filterFournitures(Store.state.fournitures);
     const isAtelier = activeTab === 'atelier';
@@ -148,6 +157,141 @@ window.Stocks = (function () {
       (f.reference || '').toLowerCase().includes(q) ||
       (f.categorie || '').toLowerCase().includes(q)
     );
+  }
+
+  // ============================================================
+  // ONGLET COMMANDES CHANTIER
+  // ============================================================
+  function renderCommandesChantier(content) {
+    // Commandes liées à un chantier (motif chantier OU chantierId renseigné), non livrées/annulées prioritaires
+    const commandes = (Store.state.commandes || [])
+      .filter(c => c.chantierId || c.motif === 'chantier')
+      .filter(c => {
+        if (!searchQuery) return true;
+        const q = searchQuery.toLowerCase();
+        const chantier = Store.state.chantiers.find(ch => ch.id === c.chantierId);
+        const fournisseur = Store.state.fournisseurs.find(f => f.id === c.fournisseurId);
+        return (c.numero || '').toLowerCase().includes(q) ||
+               (chantier?.titre || '').toLowerCase().includes(q) ||
+               (chantier?.numero || '').toLowerCase().includes(q) ||
+               (fournisseur?.nom || '').toLowerCase().includes(q);
+      })
+      .sort((a, b) => {
+        // Non livrées d'abord, puis par date
+        const order = { 'a-passer': 0, 'passee': 1, 'livree': 2, 'annulee': 3 };
+        const oa = order[a.statut] ?? 9;
+        const ob = order[b.statut] ?? 9;
+        if (oa !== ob) return oa - ob;
+        return new Date(b.dateCommande) - new Date(a.dateCommande);
+      });
+
+    const totalValue = commandes
+      .filter(c => c.statut !== 'annulee')
+      .reduce((s, c) => s + (c.lignes || []).reduce((ls, l) => ls + (l.quantite * (l.prixUnitaire || 0)), 0), 0);
+    const enAttente = commandes.filter(c => c.statut === 'a-passer' || c.statut === 'passee').length;
+
+    content.innerHTML = `
+      <div class="stock-summary">
+        <div class="stat-card">
+          <div class="stat-card__label">Commandes chantier</div>
+          <div class="stat-card__value">${commandes.length}</div>
+        </div>
+        <div class="stat-card ${enAttente > 0 ? 'stat-card--warning' : ''}">
+          <div class="stat-card__label">En attente</div>
+          <div class="stat-card__value">${enAttente}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__label">Valeur estimée HT</div>
+          <div class="stat-card__value">${Format.euro(totalValue)}</div>
+        </div>
+      </div>
+
+      <div class="commandes-chantier-info">
+        ℹ️ Ces commandes sont destinées à des chantiers précis et sont suivies séparément du stock atelier courant.
+        Une commande livrée injecte ses fournitures dans le stock atelier.
+      </div>
+
+      ${commandes.length === 0 ? UI.emptyState({
+        icon: '🏗️',
+        title: 'Aucune commande chantier',
+        message: searchQuery ? 'Aucun résultat pour cette recherche.' : 'Les commandes liées à un chantier apparaîtront ici. Créez-en depuis la page Commandes en choisissant un chantier.',
+        action: !searchQuery ? '<a class="btn btn--primary" href="#/commandes">→ Aller aux commandes</a>' : ''
+      }) : `
+        <div class="cmd-chantier-list">
+          ${commandes.map(renderCommandeChantierCard).join('')}
+        </div>
+      `}
+    `;
+
+    content.querySelectorAll('[data-cmd-id]').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        window.Commandes?.openForm?.(card.dataset.cmdId);
+      });
+      card.querySelector('[data-cmd-livree]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = card.dataset.cmdId;
+        Modal.confirm({
+          title: 'Marquer comme livrée ?',
+          message: 'Les fournitures de cette commande seront ajoutées au stock atelier.',
+          onConfirm: () => {
+            Store.markCommandeLivree(id);
+            Toast.success('Commande livrée — stock atelier mis à jour');
+            renderContent();
+          }
+        });
+      });
+    });
+  }
+
+  function renderCommandeChantierCard(c) {
+    const chantier = Store.state.chantiers.find(ch => ch.id === c.chantierId);
+    const fournisseur = Store.state.fournisseurs.find(f => f.id === c.fournisseurId);
+    const totalHT = (c.lignes || []).reduce((s, l) => s + (l.quantite * (l.prixUnitaire || 0)), 0);
+    const statutLabels = {
+      'a-passer': { label: 'À passer', cls: 'badge--warning' },
+      'passee': { label: 'Passée', cls: 'badge--info' },
+      'livree': { label: 'Livrée', cls: 'badge--success' },
+      'annulee': { label: 'Annulée', cls: 'badge--danger' }
+    };
+    const st = statutLabels[c.statut] || { label: c.statut, cls: '' };
+
+    return `
+      <div class="cmd-chantier-card" data-cmd-id="${c.id}">
+        <div class="cmd-chantier-card__head">
+          <div>
+            <span class="cmd-chantier-card__num mono">${Helpers.esc(c.numero)}</span>
+            <span class="badge ${st.cls}">${st.label}</span>
+          </div>
+          <strong class="cmd-chantier-card__total">${Format.euro(totalHT)} HT</strong>
+        </div>
+
+        <div class="cmd-chantier-card__body">
+          ${chantier ? `
+            <div class="cmd-chantier-card__chantier">
+              🏗️ <strong>${Helpers.esc(chantier.numero)}</strong> — ${Helpers.esc(chantier.titre)}
+            </div>
+          ` : '<div class="cmd-chantier-card__chantier hint">Chantier non précisé</div>'}
+          ${fournisseur ? `<div class="hint">🏢 ${Helpers.esc(fournisseur.nom)}</div>` : ''}
+          <div class="hint">📅 Commandé le ${Format.dateShort(c.dateCommande)}${c.dateLivraisonPrevue ? ` · livraison prévue ${Format.dateShort(c.dateLivraisonPrevue)}` : ''}</div>
+
+          <div class="cmd-chantier-card__lignes">
+            ${(c.lignes || []).map(l => `
+              <div class="cmd-ligne">
+                <span>${Helpers.esc(l.designation)}</span>
+                <span class="mono">${l.quantite} ${Helpers.esc(l.unite || '')}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        ${(c.statut === 'a-passer' || c.statut === 'passee') ? `
+          <div class="cmd-chantier-card__actions">
+            <button class="btn btn--ghost btn--sm" data-cmd-livree>✓ Marquer livrée</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
   }
 
   function renderStockRow(f, isAtelier, equipe) {
