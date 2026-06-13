@@ -408,5 +408,217 @@ window.PdfExport = (function () {
     Toast.success('Planning PDF généré');
   }
 
-  return { chantier, planning };
+  // ============================================================
+  // EXPORT MOUVEMENTS DE STOCK (PDF, filtrable par période)
+  // ============================================================
+  function mouvements(filter = null) {
+    const JsPDF = getJsPDF();
+    if (!JsPDF) { Toast.error('Bibliothèque PDF non chargée'); return; }
+
+    const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    const entreprise = Store.state.parametres?.entreprise || {};
+
+    // Filtrage
+    let mvts = (Store.state.mouvements || []).slice();
+    if (filter && (filter.month != null || filter.year != null)) {
+      mvts = mvts.filter(m => {
+        const d = new Date(m.date);
+        if (filter.year != null && d.getFullYear() !== filter.year) return false;
+        if (filter.month != null && d.getMonth() !== filter.month) return false;
+        return true;
+      });
+    }
+    mvts.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // En-tête
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageWidth, 25, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(entreprise.nom || 'ChantierPro', margin, 12);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text('MOUVEMENTS DE STOCK', margin, 20);
+    doc.setFontSize(9);
+    doc.text(`Édité le ${Format.date(new Date())}`, pageWidth - margin, 12, { align: 'right' });
+
+    const MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+    let periodeLabel = 'Tous les mouvements';
+    if (filter && filter.month != null && filter.year != null) periodeLabel = `${MOIS[filter.month]} ${filter.year}`;
+    else if (filter && filter.year != null) periodeLabel = `Année ${filter.year}`;
+    doc.text(periodeLabel, pageWidth - margin, 20, { align: 'right' });
+
+    if (mvts.length === 0) {
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(11);
+      doc.text('Aucun mouvement pour cette période.', margin, 40);
+      doc.save(`Mouvements_${new Date().toISOString().split('T')[0]}.pdf`);
+      Toast.warning('Aucun mouvement pour cette période');
+      return;
+    }
+
+    // Stats résumé
+    const entrees = mvts.filter(m => m.type === 'entree').length;
+    const sorties = mvts.filter(m => m.type === 'sortie').length;
+    const transferts = mvts.filter(m => m.type === 'transfert').length;
+
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(10);
+    doc.text(`${mvts.length} mouvement(s) · ${entrees} entrée(s) · ${sorties} sortie(s)${transferts ? ' · ' + transferts + ' transfert(s)' : ''}`, margin, 32);
+
+    if (doc.autoTable) {
+      doc.autoTable({
+        startY: 37,
+        head: [['Date', 'Type', 'Fourniture', 'Qté', 'Emplacement', 'Motif']],
+        body: mvts.map(m => {
+          const f = Store.state.fournitures.find(x => x.id === m.fournitureId);
+          const empLabel = m.emplacement === 'atelier' ? 'Atelier'
+            : Store.state.equipes.find(e => e.id === m.emplacement)?.nom || m.emplacement;
+          const typeLabel = { entree: 'Entrée', sortie: 'Sortie', transfert: 'Transfert' }[m.type] || m.type;
+          return [
+            Format.dateShort(m.date),
+            typeLabel,
+            f?.nom || '—',
+            (m.type === 'sortie' ? '-' : m.type === 'entree' ? '+' : '') + m.quantite + ' ' + (f?.unite || ''),
+            empLabel,
+            m.motif || '—'
+          ];
+        }),
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 9, cellPadding: 2.5 },
+        columnStyles: { 3: { halign: 'right' } },
+        margin: { left: margin, right: margin }
+      });
+    }
+
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`${entreprise.nom || 'ChantierPro'} • Page ${i}/${pageCount}`,
+        pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
+    }
+
+    doc.save(`Mouvements_${periodeLabel.replace(/\s+/g, '_')}.pdf`);
+    Toast.success('Mouvements PDF générés');
+  }
+
+  // ============================================================
+  // EXPORT ÉTAT DU STOCK (PDF, atelier + tous les camions)
+  // ============================================================
+  function stockEtat() {
+    const JsPDF = getJsPDF();
+    if (!JsPDF) { Toast.error('Bibliothèque PDF non chargée'); return; }
+
+    const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    const entreprise = Store.state.parametres?.entreprise || {};
+
+    // En-tête
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageWidth, 25, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(entreprise.nom || 'ChantierPro', margin, 12);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text('ÉTAT DU STOCK', margin, 20);
+    doc.setFontSize(9);
+    doc.text(`Édité le ${Format.date(new Date())}`, pageWidth - margin, 12, { align: 'right' });
+
+    let y = 32;
+
+    // Fonction qui dessine une section de stock
+    const drawStockSection = (titre, stockObj, couleur) => {
+      const rows = Store.state.fournitures
+        .map(f => {
+          const qte = stockObj[f.id] || 0;
+          return { f, qte };
+        })
+        .filter(r => r.qte > 0); // n'afficher que ce qui est présent
+
+      if (rows.length === 0) return;
+
+      if (y > 250) { doc.addPage(); y = margin; }
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(15, 23, 42);
+      doc.text(titre, margin, y);
+      y += 2;
+
+      const totalValue = rows.reduce((s, r) => s + r.qte * (r.f.prixUnitaire || 0), 0);
+
+      doc.autoTable({
+        startY: y + 2,
+        head: [['Référence', 'Désignation', 'Quantité', 'Unité', 'Prix unit. HT', 'Valeur HT', 'Seuil']],
+        body: rows.map(({ f, qte }) => {
+          const sousSeuil = qte <= (f.seuilAlerte || 0);
+          return [
+            f.reference || '—',
+            f.nom,
+            { content: String(qte), styles: { fontStyle: sousSeuil ? 'bold' : 'normal', textColor: sousSeuil ? [220, 38, 38] : [15, 23, 42] } },
+            f.unite || '',
+            (f.prixUnitaire || 0).toFixed(2) + ' €',
+            (qte * (f.prixUnitaire || 0)).toFixed(2) + ' €',
+            String(f.seuilAlerte || 0)
+          ];
+        }),
+        foot: [['', '', '', '', 'TOTAL', totalValue.toFixed(2) + ' €', '']],
+        theme: 'striped',
+        headStyles: { fillColor: couleur, textColor: 255, fontStyle: 'bold' },
+        footStyles: { fillColor: [241, 245, 249], textColor: 15, fontStyle: 'bold' },
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: { 2: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } },
+        margin: { left: margin, right: margin }
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    };
+
+    // Atelier
+    drawStockSection('🏭 Atelier', Store.state.stockAtelier || {}, [59, 130, 246]);
+
+    // Chaque camion / équipe
+    (Store.state.equipes || []).forEach(eq => {
+      const stockCamion = (Store.state.stockCamions || {})[eq.id] || {};
+      drawStockSection(`🚚 ${eq.nom}`, stockCamion, [16, 185, 129]);
+    });
+
+    // Valeur totale globale
+    let grandTotal = 0;
+    Store.state.fournitures.forEach(f => {
+      const totalQte = Store.getStockTotal(f.id).total;
+      grandTotal += totalQte * (f.prixUnitaire || 0);
+    });
+
+    if (y > 260) { doc.addPage(); y = margin; }
+    doc.setFillColor(15, 23, 42);
+    doc.rect(margin, y, pageWidth - 2 * margin, 12, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('VALEUR TOTALE DU STOCK (HT)', margin + 3, y + 8);
+    doc.text(grandTotal.toFixed(2) + ' €', pageWidth - margin - 3, y + 8, { align: 'right' });
+
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`${entreprise.nom || 'ChantierPro'} • Page ${i}/${pageCount}`,
+        pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
+    }
+
+    doc.save(`Etat_stock_${new Date().toISOString().split('T')[0]}.pdf`);
+    Toast.success('État du stock PDF généré');
+  }
+
+  return { chantier, planning, mouvements, stockEtat };
 })();
