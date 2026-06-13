@@ -219,6 +219,9 @@ const Planning = {
         } else if (type === 'alerte-stock') {
           const fournitureId = info.event.extendedProps.fournitureId;
           this._openCreateCommandeForAlerte(fournitureId);
+        } else if (type === 'reappro-livraison') {
+          const fournitureId = info.event.extendedProps.fournitureId;
+          this._openCreateCommandeForAlerte(fournitureId);
         } else if (type === 'rdv') {
           const rdvId = info.event.extendedProps.rdvId;
           if (rdvId && window.RendezVous) {
@@ -408,12 +411,14 @@ const Planning = {
         });
       });
 
-      // 4) ALERTES STOCK
+      // 4) ALERTES STOCK + JOUR LIMITE DE COMMANDE
       const today = new Date().toISOString().split('T')[0];
       const alertes = this._getAlertesStock();
       alertes.forEach(f => {
         const total = Store.getStockTotal(f.id).total;
         const isRupture = total === 0;
+
+        // Alerte "à commander maintenant" affichée aujourd'hui
         events.push({
           id: 'alerte_' + f.id,
           title: `${isRupture ? '🔴 RUPTURE' : '⚠️ À commander'} : ${f.nom} (${total} ${f.unite})`,
@@ -426,6 +431,29 @@ const Planning = {
           editable: false,
           classNames: ['planning-alerte', isRupture ? 'planning-alerte--rupture' : 'planning-alerte--low']
         });
+
+        // Indication "commander avant le X" selon le délai fournisseur
+        const info = Store.getReapproInfo ? Store.getReapproInfo(f.id) : null;
+        if (info && info.fournisseur && info.delai) {
+          // Date limite = aujourd'hui (urgent car déjà sous le seuil)
+          // On affiche aussi la date de livraison estimée pour info
+          const livraison = new Date();
+          livraison.setDate(livraison.getDate() + info.delai);
+          const livraisonStr = livraison.toISOString().split('T')[0];
+
+          events.push({
+            id: 'reappro_livr_' + f.id,
+            title: `📦 Livraison ${f.nom} si commandé auj. (délai ${info.delai}j)`,
+            start: livraisonStr,
+            allDay: true,
+            backgroundColor: '#0ea5e9',
+            borderColor: '#0284c7',
+            textColor: '#ffffff',
+            extendedProps: { fournitureId: f.id, type: 'reappro-livraison' },
+            editable: false,
+            classNames: ['planning-reappro-livr']
+          });
+        }
       });
     }
 
