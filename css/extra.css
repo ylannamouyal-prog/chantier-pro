@@ -1795,6 +1795,181 @@ a.btn-icon:hover {
   font-weight: 600;
 }
 
+/* ========== NOTIFICATIONS (cloche + panneau) ========== */
+.notif-wrap {
+  position: relative;
+}
+.notif-icon {
+  font-size: 18px;
+}
+.notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  border: 2px solid var(--bg-elevated, #fff);
+}
+.notif-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  max-height: 70vh;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg, 0 12px 32px rgba(0,0,0,0.18));
+  z-index: 300;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: notifIn 0.18s ease-out;
+}
+@keyframes notifIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.notif-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.notif-panel__header strong {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: var(--fs-md);
+}
+.notif-panel__count {
+  font-size: var(--fs-xs);
+  color: var(--txt-muted);
+}
+.notif-panel__body {
+  overflow-y: auto;
+  padding: var(--s-2);
+}
+.notif-group {
+  margin-bottom: var(--s-3);
+}
+.notif-group:last-child {
+  margin-bottom: 0;
+}
+.notif-group__title {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--txt-muted);
+  padding: 4px var(--s-2);
+}
+.notif-group__title--urgent {
+  color: #ef4444;
+}
+.notif-group__title--tomorrow {
+  color: #f59e0b;
+}
+.notif-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background var(--t-fast);
+}
+.notif-item:hover {
+  background: var(--bg-hover);
+}
+.notif-item__icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-md);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.notif-item__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.notif-item__content strong {
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notif-item__content span {
+  font-size: var(--fs-xs);
+  color: var(--txt-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notif-item__date {
+  font-size: var(--fs-xs);
+  color: var(--txt-muted);
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.notif-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-5) var(--s-4);
+  text-align: center;
+}
+.notif-empty__icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border-radius: 50%;
+  font-size: 24px;
+}
+.notif-empty p {
+  margin: 0;
+  color: var(--txt-muted);
+  font-size: var(--fs-sm);
+}
+
+/* Pastille livraison réappro dans le planning */
+.fc-event.planning-reappro-livr {
+  font-weight: 600;
+  border-radius: var(--r-md) !important;
+  opacity: 0.95;
+}
+
+@media (max-width: 768px) {
+  .notif-panel {
+    position: fixed;
+    top: 64px;
+    right: var(--s-3);
+    left: var(--s-3);
+    width: auto;
+  }
+}
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
