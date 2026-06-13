@@ -178,6 +178,7 @@
 
     // Search
     window.Search?.init();
+    window.Notifications?.init();
   }
 
   function updateBadges() {
