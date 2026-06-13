@@ -107,11 +107,23 @@ window.ExcelExport = (function () {
     Toast.success('Excel téléchargé');
   }
 
-  function mouvements() {
+  function mouvements(filter = null) {
     const XLSX = getXLSX();
     if (!XLSX) { Toast.error('Bibliothèque Excel non chargée'); return; }
 
-    const rows = (Store.state.mouvements || [])
+    let mvts = (Store.state.mouvements || []).slice();
+
+    // Filtre par mois/année
+    if (filter && (filter.month != null || filter.year != null)) {
+      mvts = mvts.filter(m => {
+        const d = new Date(m.date);
+        if (filter.year != null && d.getFullYear() !== filter.year) return false;
+        if (filter.month != null && d.getMonth() !== filter.month) return false;
+        return true;
+      });
+    }
+
+    const rows = mvts
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .map(m => {
         const f = Store.state.fournitures.find(x => x.id === m.fournitureId);
@@ -127,12 +139,23 @@ window.ExcelExport = (function () {
         };
       });
 
+    if (rows.length === 0) { Toast.warning('Aucun mouvement pour cette période'); return; }
+
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [{ wch: 20 }, { wch: 12 }, { wch: 30 }, { wch: 10 }, { wch: 18 }, { wch: 30 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Mouvements');
-    XLSX.writeFile(wb, `mouvements_${new Date().toISOString().split('T')[0]}.xlsx`);
+    const suffix = filterSuffix(filter);
+    XLSX.writeFile(wb, `mouvements${suffix}_${new Date().toISOString().split('T')[0]}.xlsx`);
     Toast.success('Excel téléchargé');
+  }
+
+  function filterSuffix(filter) {
+    if (!filter) return '';
+    const parts = [];
+    if (filter.month != null) parts.push(String(filter.month + 1).padStart(2, '0'));
+    if (filter.year != null) parts.push(filter.year);
+    return parts.length ? '_' + parts.join('-') : '';
   }
 
   return { chantiers, clients, stocks, mouvements };
