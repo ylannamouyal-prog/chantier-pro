@@ -2162,6 +2162,58 @@ a.btn-icon:hover {
   color: #3b82f6;
 }
 
+/* ========== ENGINS ATELIER / LOCATION ========== */
+.engins-section {
+  margin-bottom: var(--s-5);
+}
+.engins-section__title {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  margin-bottom: var(--s-3);
+  padding-bottom: var(--s-2);
+  border-bottom: 2px solid var(--border);
+}
+
+/* Choix disponibilité dans le formulaire */
+.dispo-choice {
+  display: flex;
+  gap: var(--s-2);
+}
+.dispo-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  background: var(--bg-sunken);
+  border: 2px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+.dispo-option input { display: none; }
+.dispo-option:hover { border-color: var(--border-strong); }
+.dispo-option.is-selected {
+  border-color: #3b82f6;
+  background: color-mix(in srgb, #3b82f6 10%, transparent);
+}
+.dispo-icon { font-size: 24px; flex-shrink: 0; }
+
+/* Bloc infos loueur */
+.loueur-block {
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+}
+.loueur-block__title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--txt-secondary);
+  margin-bottom: var(--s-2);
+}
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
