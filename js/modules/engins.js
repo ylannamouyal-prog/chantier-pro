@@ -2,14 +2,17 @@
 window.Engins = (function () {
   function render(container) {
     const engins = Store.state.engins || [];
+    const atelier = engins.filter(e => (e.disponibilite || 'atelier') === 'atelier');
+    const location = engins.filter(e => e.disponibilite === 'location');
 
     container.innerHTML = `
       <div class="view-header">
         <div>
           <h1 class="view-title">🚜 Engins & Locations</h1>
-          <p class="view-subtitle">${engins.length} engin${engins.length > 1 ? 's' : ''} — détection automatique des conflits</p>
+          <p class="view-subtitle">${engins.length} engin${engins.length > 1 ? 's' : ''} — ${atelier.length} à l'atelier · ${location.length} en location</p>
         </div>
         <div class="view-header__actions">
+          <button class="btn btn--ghost" id="engExport">📥 Exporter réservations</button>
           <button class="btn btn--ghost" id="engReserv">📅 Toutes réservations</button>
           <button class="btn btn--primary" id="engAdd">+ Nouvel engin</button>
         </div>
@@ -19,11 +22,24 @@ window.Engins = (function () {
         icon: '🚜', title: 'Aucun engin',
         message: 'Ajoutez vos engins (nacelles, échafaudages, camions...).',
         action: '<button class="btn btn--primary" onclick="Engins._add()">+ Nouvel engin</button>'
-      }) : `<div class="engins-grid">${engins.map(renderCard).join('')}</div>`}
+      }) : `
+        <div class="engins-section">
+          <div class="engins-section__title">🏭 Engins à l'atelier <span class="hint">(${atelier.length})</span></div>
+          ${atelier.length === 0 ? '<p class="hint" style="padding:var(--s-2)">Aucun engin à l\'atelier.</p>' :
+            `<div class="engins-grid">${atelier.map(renderCard).join('')}</div>`}
+        </div>
+
+        <div class="engins-section">
+          <div class="engins-section__title">🔑 Engins à louer <span class="hint">(${location.length})</span></div>
+          ${location.length === 0 ? '<p class="hint" style="padding:var(--s-2)">Aucun engin en location. Ajoutez-en un et choisissez "À louer".</p>' :
+            `<div class="engins-grid">${location.map(renderCard).join('')}</div>`}
+        </div>
+      `}
     `;
 
     document.getElementById('engAdd')?.addEventListener('click', () => openForm());
     document.getElementById('engReserv')?.addEventListener('click', openAllReservations);
+    document.getElementById('engExport')?.addEventListener('click', openExportReservations);
 
     container.querySelectorAll('[data-engin-id]').forEach(card => {
       card.querySelector('[data-eng-edit]')?.addEventListener('click', () => openForm(card.dataset.enginId));
@@ -53,6 +69,8 @@ window.Engins = (function () {
         <div class="engin-card__meta">
           ${engin.modele ? `<div>📋 ${Helpers.esc(engin.modele)}</div>` : ''}
           ${engin.proprietaire ? `<div>🏢 ${Helpers.esc(engin.proprietaire)}</div>` : ''}
+          ${engin.disponibilite === 'location' && engin.loueurTel ? `<div>📞 ${Format.phone(engin.loueurTel)}</div>` : ''}
+          ${engin.disponibilite === 'location' && engin.loueurEmail ? `<div>✉ ${Helpers.esc(engin.loueurEmail)}</div>` : ''}
           ${engin.coutJournalier ? `<div>💶 ${Format.euro(engin.coutJournalier)}/jour</div>` : ''}
         </div>
         ${currentRes ? `
@@ -84,23 +102,35 @@ window.Engins = (function () {
 
   function openForm(id = null) {
     const existing = id ? Store.state.engins.find(e => e.id === id) : null;
-    const e = existing || { nom: '', type: '', modele: '', proprietaire: '', icone: '🚜', coutJournalier: 0 };
+    const e = existing || { nom: '', type: '', modele: '', proprietaire: '', icone: '🚜', coutJournalier: 0, disponibilite: 'atelier', loueurTel: '', loueurEmail: '' };
 
     Modal.open({
       title: existing ? 'Modifier l\'engin' : 'Nouvel engin',
       size: 'medium',
       body: `
         <div class="form-grid">
+          <div class="form-field form-field--full">
+            <label>Disponibilité *</label>
+            <div class="dispo-choice">
+              <label class="dispo-option ${(e.disponibilite || 'atelier') === 'atelier' ? 'is-selected' : ''}">
+                <input type="radio" name="f_dispo" value="atelier" ${(e.disponibilite || 'atelier') === 'atelier' ? 'checked' : ''}>
+                <span class="dispo-icon">🏭</span>
+                <span><strong>À l'atelier</strong><br><span class="hint">Engin que vous possédez</span></span>
+              </label>
+              <label class="dispo-option ${e.disponibilite === 'location' ? 'is-selected' : ''}">
+                <input type="radio" name="f_dispo" value="location" ${e.disponibilite === 'location' ? 'checked' : ''}>
+                <span class="dispo-icon">🔑</span>
+                <span><strong>À louer</strong><br><span class="hint">Engin loué chez un tiers</span></span>
+              </label>
+            </div>
+          </div>
+
           <div class="form-field">
             <label>Icône</label>
             <select id="f_icone" class="form-select">
               ${['🚜', '🚛', '🏗️', '🪜', '🛠️', '🔧', '⚙️'].map(i =>
                 `<option value="${i}" ${e.icone === i ? 'selected' : ''}>${i}</option>`).join('')}
             </select>
-          </div>
-          <div class="form-field form-field--full">
-            <label>Nom *</label>
-            <input id="f_nom" class="form-input" value="${Helpers.esc(e.nom)}" autofocus>
           </div>
           <div class="form-field">
             <label>Type</label>
@@ -109,17 +139,37 @@ window.Engins = (function () {
                 .map(t => `<option value="${t}" ${e.type === t ? 'selected' : ''}>${t || '—'}</option>`).join('')}
             </select>
           </div>
-          <div class="form-field">
+          <div class="form-field form-field--full">
+            <label>Nom *</label>
+            <input id="f_nom" class="form-input" value="${Helpers.esc(e.nom)}" autofocus>
+          </div>
+          <div class="form-field form-field--full">
             <label>Modèle</label>
             <input id="f_modele" class="form-input" value="${Helpers.esc(e.modele || '')}">
           </div>
-          <div class="form-field">
-            <label>Propriétaire / Loueur</label>
-            <input id="f_prop" class="form-input" value="${Helpers.esc(e.proprietaire || '')}">
-          </div>
-          <div class="form-field">
-            <label>Coût journalier (€)</label>
-            <input id="f_cout" class="form-input mono" type="number" step="0.01" min="0" value="${e.coutJournalier || 0}">
+
+          <div class="form-field form-field--full" id="loueurSection">
+            <div class="loueur-block">
+              <div class="loueur-block__title">🔑 Informations du loueur</div>
+              <div class="form-grid">
+                <div class="form-field form-field--full">
+                  <label>Nom du loueur</label>
+                  <input id="f_prop" class="form-input" value="${Helpers.esc(e.proprietaire || '')}" placeholder="Ex: Loxam, Kiloutou...">
+                </div>
+                <div class="form-field">
+                  <label>Téléphone</label>
+                  <input id="f_loueurTel" class="form-input" value="${Helpers.esc(e.loueurTel || '')}" placeholder="01 23 45 67 89">
+                </div>
+                <div class="form-field">
+                  <label>Email</label>
+                  <input id="f_loueurEmail" class="form-input" type="email" value="${Helpers.esc(e.loueurEmail || '')}" placeholder="contact@loueur.fr">
+                </div>
+                <div class="form-field form-field--full">
+                  <label>Coût de location (€/jour)</label>
+                  <input id="f_cout" class="form-input mono" type="number" step="0.01" min="0" value="${e.coutJournalier || 0}">
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       `,
@@ -128,6 +178,27 @@ window.Engins = (function () {
         <button class="btn btn--primary" id="eSave">${existing ? 'Mettre à jour' : 'Créer'}</button>
       `,
       onOpen: () => {
+        const loueurSection = document.getElementById('loueurSection');
+        const updateLoueurVisibility = () => {
+          const dispo = document.querySelector('input[name="f_dispo"]:checked')?.value;
+          // Pour un engin atelier, on peut quand même renseigner le propriétaire mais on cache le bloc loueur détaillé
+          if (dispo === 'location') {
+            loueurSection.querySelector('.loueur-block__title').textContent = '🔑 Informations du loueur';
+            loueurSection.style.display = '';
+          } else {
+            loueurSection.querySelector('.loueur-block__title').textContent = '💶 Informations complémentaires';
+            loueurSection.style.display = '';
+          }
+        };
+        document.querySelectorAll('input[name="f_dispo"]').forEach(r => {
+          r.addEventListener('change', () => {
+            document.querySelectorAll('.dispo-option').forEach(o => o.classList.remove('is-selected'));
+            r.closest('.dispo-option').classList.add('is-selected');
+            updateLoueurVisibility();
+          });
+        });
+        updateLoueurVisibility();
+
         document.getElementById('eSave').addEventListener('click', () => {
           const data = {
             nom: document.getElementById('f_nom').value.trim(),
@@ -135,7 +206,10 @@ window.Engins = (function () {
             modele: document.getElementById('f_modele').value.trim(),
             proprietaire: document.getElementById('f_prop').value.trim(),
             icone: document.getElementById('f_icone').value,
-            coutJournalier: parseFloat(document.getElementById('f_cout').value) || 0
+            coutJournalier: parseFloat(document.getElementById('f_cout').value) || 0,
+            disponibilite: document.querySelector('input[name="f_dispo"]:checked')?.value || 'atelier',
+            loueurTel: document.getElementById('f_loueurTel').value.trim(),
+            loueurEmail: document.getElementById('f_loueurEmail').value.trim()
           };
           if (!data.nom) { Toast.warning('Le nom est requis'); return; }
           if (existing) {
@@ -248,9 +322,12 @@ window.Engins = (function () {
         <div class="detail-section">
           <h3>Caractéristiques</h3>
           <dl class="detail-list">
+            <dt>Disponibilité</dt><dd>${engin.disponibilite === 'location' ? '🔑 À louer' : '🏭 À l\'atelier'}</dd>
             ${engin.type ? `<dt>Type</dt><dd>${Helpers.esc(engin.type)}</dd>` : ''}
             ${engin.modele ? `<dt>Modèle</dt><dd>${Helpers.esc(engin.modele)}</dd>` : ''}
-            ${engin.proprietaire ? `<dt>Propriétaire</dt><dd>${Helpers.esc(engin.proprietaire)}</dd>` : ''}
+            ${engin.proprietaire ? `<dt>${engin.disponibilite === 'location' ? 'Loueur' : 'Propriétaire'}</dt><dd>${Helpers.esc(engin.proprietaire)}</dd>` : ''}
+            ${engin.loueurTel ? `<dt>Téléphone</dt><dd><span class="mono">${Format.phone(engin.loueurTel)}</span> <a href="tel:${Helpers.esc(engin.loueurTel)}" class="btn-icon" title="Appeler">📞</a></dd>` : ''}
+            ${engin.loueurEmail ? `<dt>Email</dt><dd>${Helpers.esc(engin.loueurEmail)} <a href="mailto:${Helpers.esc(engin.loueurEmail)}" class="btn-icon" title="Email">✉</a></dd>` : ''}
             ${engin.coutJournalier ? `<dt>Coût</dt><dd>${Format.euro(engin.coutJournalier)} / jour</dd>` : ''}
           </dl>
         </div>
@@ -319,6 +396,87 @@ window.Engins = (function () {
         </table>
       `,
       footer: `<button class="btn btn--primary" onclick="Modal.close()">Fermer</button>`
+    });
+  }
+
+  // ============================================================
+  // EXPORT DES RÉSERVATIONS (PDF / Excel, par période)
+  // ============================================================
+  function openExportReservations() {
+    const reservations = Store.state.reservationsEngins || [];
+    const annees = [...new Set(reservations.map(r => new Date(r.dateDebut).getFullYear()))].sort((a, b) => b - a);
+    const currentYear = new Date().getFullYear();
+    if (!annees.includes(currentYear)) annees.unshift(currentYear);
+    const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+    Modal.open({
+      title: '📥 Exporter les réservations',
+      size: 'medium',
+      body: `
+        <div class="form-grid">
+          <div class="form-field form-field--full">
+            <label>Période</label>
+            <select id="exp_periode" class="form-select">
+              <option value="all">Toutes les réservations</option>
+              <option value="year">Une année entière</option>
+              <option value="month" selected>Un mois précis</option>
+            </select>
+          </div>
+          <div class="form-field" id="exp_year_wrap">
+            <label>Année</label>
+            <select id="exp_year" class="form-select">
+              ${annees.map(a => `<option value="${a}" ${a === currentYear ? 'selected' : ''}>${a}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-field" id="exp_month_wrap">
+            <label>Mois</label>
+            <select id="exp_month" class="form-select">
+              ${MOIS.map((m, i) => `<option value="${i}" ${i === new Date().getMonth() ? 'selected' : ''}>${m}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-field form-field--full">
+            <label>Format</label>
+            <div class="export-format-choice">
+              <label class="export-format-option">
+                <input type="radio" name="exp_format" value="pdf" checked>
+                <span class="export-format-icon">📄</span><span>PDF</span>
+              </label>
+              <label class="export-format-option">
+                <input type="radio" name="exp_format" value="excel">
+                <span class="export-format-icon">📊</span><span>Excel</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>
+        <button class="btn btn--primary" id="exp_go">Télécharger</button>
+      `,
+      onOpen: () => {
+        const periodeSelect = document.getElementById('exp_periode');
+        const yearWrap = document.getElementById('exp_year_wrap');
+        const monthWrap = document.getElementById('exp_month_wrap');
+        const updateVisibility = () => {
+          const v = periodeSelect.value;
+          yearWrap.style.display = (v === 'year' || v === 'month') ? '' : 'none';
+          monthWrap.style.display = (v === 'month') ? '' : 'none';
+        };
+        periodeSelect.addEventListener('change', updateVisibility);
+        updateVisibility();
+
+        document.getElementById('exp_go').addEventListener('click', () => {
+          const periode = periodeSelect.value;
+          const format = document.querySelector('input[name="exp_format"]:checked').value;
+          let filter = null;
+          if (periode === 'year') filter = { year: parseInt(document.getElementById('exp_year').value) };
+          else if (periode === 'month') filter = { year: parseInt(document.getElementById('exp_year').value), month: parseInt(document.getElementById('exp_month').value) };
+
+          Modal.close();
+          if (format === 'pdf') window.PdfExport?.reservationsEngins(filter);
+          else window.ExcelExport?.reservationsEngins(filter);
+        });
+      }
     });
   }
 
