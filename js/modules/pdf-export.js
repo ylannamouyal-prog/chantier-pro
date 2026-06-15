@@ -729,5 +729,99 @@ window.PdfExport = (function () {
     Toast.success('État du stock PDF généré');
   }
 
-  return { chantier, planning, mouvements, stockEtat, computeFournituresChantier };
+  return { chantier, planning, mouvements, stockEtat, computeFournituresChantier, reservationsEngins };
+
+  function reservationsEngins(filter = null) {
+    const JsPDF = getJsPDF();
+    if (!JsPDF) { Toast.error('Bibliothèque PDF non chargée'); return; }
+
+    const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    const entreprise = Store.state.parametres?.entreprise || {};
+
+    let resas = (Store.state.reservationsEngins || []).slice();
+    if (filter && (filter.month != null || filter.year != null)) {
+      resas = resas.filter(r => {
+        const d = new Date(r.dateDebut);
+        if (filter.year != null && d.getFullYear() !== filter.year) return false;
+        if (filter.month != null && d.getMonth() !== filter.month) return false;
+        return true;
+      });
+    }
+    resas.sort((a, b) => new Date(b.dateDebut) - new Date(a.dateDebut));
+
+    // En-tête
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageWidth, 25, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(entreprise.nom || 'ChantierPro', margin, 12);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text('RÉSERVATIONS ENGINS', margin, 20);
+    doc.setFontSize(9);
+    doc.text(`Édité le ${Format.date(new Date())}`, pageWidth - margin, 12, { align: 'right' });
+
+    const MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+    let periodeLabel = 'Toutes les réservations';
+    if (filter && filter.month != null && filter.year != null) periodeLabel = `${MOIS[filter.month]} ${filter.year}`;
+    else if (filter && filter.year != null) periodeLabel = `Année ${filter.year}`;
+    doc.text(periodeLabel, pageWidth - margin, 20, { align: 'right' });
+
+    if (resas.length === 0) {
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(11);
+      doc.text('Aucune réservation pour cette période.', margin, 40);
+      doc.save(`Reservations_engins_${new Date().toISOString().split('T')[0]}.pdf`);
+      Toast.warning('Aucune réservation pour cette période');
+      return;
+    }
+
+    // Calcul coût total estimé
+    let coutTotal = 0;
+    const rows = resas.map(r => {
+      const engin = Store.state.engins.find(e => e.id === r.enginId);
+      const chantier = Store.state.chantiers.find(c => c.id === r.chantierId);
+      const jours = Math.max(1, Math.round((new Date(r.dateFin) - new Date(r.dateDebut)) / 86400000) + 1);
+      const cout = (engin?.coutJournalier || 0) * jours;
+      coutTotal += cout;
+      return [
+        Format.dateShort(r.dateDebut) + ' → ' + Format.dateShort(r.dateFin),
+        engin?.nom || '—',
+        (engin?.disponibilite === 'location' ? '🔑 Location' : '🏭 Atelier'),
+        chantier?.numero || '—',
+        jours + ' j',
+        cout > 0 ? cout.toFixed(2) + ' €' : '—'
+      ];
+    });
+
+    if (doc.autoTable) {
+      doc.autoTable({
+        startY: 32,
+        head: [['Période', 'Engin', 'Disponibilité', 'Chantier', 'Durée', 'Coût estimé']],
+        body: rows,
+        foot: [['', '', '', '', 'TOTAL', coutTotal.toFixed(2) + ' €']],
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+        footStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 9, cellPadding: 2.5 },
+        columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' } },
+        margin: { left: margin, right: margin }
+      });
+    }
+
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`${entreprise.nom || 'ChantierPro'} • Page ${i}/${pageCount}`,
+        pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
+    }
+
+    doc.save(`Reservations_engins_${periodeLabel.replace(/\s+/g, '_')}.pdf`);
+    Toast.success('Réservations PDF générées');
+  }
 })();
