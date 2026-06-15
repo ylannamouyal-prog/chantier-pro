@@ -687,6 +687,172 @@ const Chantiers = {
   // ===================================================
   // FICHE DÉTAIL
   // ===================================================
+  // ===================================================
+  // BILAN DÉPENSES
+  // ===================================================
+  _renderBilanDepenses(chantierId) {
+    const bilan = Store.getBilanChantier(chantierId);
+    if (!bilan) return '';
+
+    const CATS = {
+      'location': { label: 'Location', icon: '🏗️' },
+      'carburant': { label: 'Carburant', icon: '⛽' },
+      'main-oeuvre': { label: "Main d'œuvre", icon: '👷' },
+      'sous-traitance': { label: 'Sous-traitance', icon: '🤝' },
+      'autre': { label: 'Autre', icon: '📋' }
+    };
+
+    return `
+      <div class="detail-section__title">💰 Dépenses du chantier</div>
+
+      <div class="bilan-cards">
+        <div class="bilan-card">
+          <span class="bilan-card__label">📐 Fournitures estimées</span>
+          <span class="bilan-card__value">${Format.euro(bilan.totalFournitures)}</span>
+        </div>
+        <div class="bilan-card">
+          <span class="bilan-card__label">📦 Commandes chantier</span>
+          <span class="bilan-card__value">${Format.euro(bilan.totalCommandes)}</span>
+        </div>
+        <div class="bilan-card">
+          <span class="bilan-card__label">✍️ Dépenses manuelles</span>
+          <span class="bilan-card__value">${Format.euro(bilan.totalManuelles)}</span>
+        </div>
+        <div class="bilan-card bilan-card--total">
+          <span class="bilan-card__label">TOTAL HT</span>
+          <span class="bilan-card__value">${Format.euro(bilan.totalGeneral)}</span>
+        </div>
+      </div>
+
+      <div class="depenses-manuelles">
+        <div class="depenses-manuelles__head">
+          <strong>Dépenses manuelles</strong>
+          <button class="btn btn--ghost btn--sm" id="addDepenseBtn">+ Ajouter une dépense</button>
+        </div>
+        ${bilan.manuelles.length === 0 ? `
+          <p class="hint">Aucune dépense manuelle. Ajoutez vos frais : location, carburant, main d'œuvre, sous-traitance...</p>
+        ` : `
+          <div class="depenses-list">
+            ${bilan.manuelles.map(d => {
+              const cat = CATS[d.categorie] || CATS.autre;
+              return `
+                <div class="depense-row" data-depense-id="${d.id}">
+                  <span class="depense-icon">${cat.icon}</span>
+                  <div class="depense-info">
+                    <strong>${Helpers.esc(d.libelle || cat.label)}</strong>
+                    <span class="hint">${cat.label}${d.date ? ' · ' + Format.dateShort(d.date) : ''}</span>
+                  </div>
+                  <span class="depense-montant mono">${Format.euro(d.montant)}</span>
+                  <button class="btn-icon" data-edit-depense="${d.id}" title="Modifier">✎</button>
+                  <button class="btn-icon btn-icon--danger" data-delete-depense="${d.id}" title="Supprimer">🗑</button>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `}
+      </div>
+    `;
+  },
+
+  _bindDepensesEvents(chantierId) {
+    const $ = (sel) => document.querySelector(sel);
+    $('#addDepenseBtn')?.addEventListener('click', () => this._openDepenseForm(chantierId));
+
+    document.querySelectorAll('[data-edit-depense]').forEach(btn => {
+      btn.addEventListener('click', () => this._openDepenseForm(chantierId, btn.dataset.editDepense));
+    });
+    document.querySelectorAll('[data-delete-depense]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const depId = btn.dataset.deleteDepense;
+        Modal.confirm({
+          title: 'Supprimer cette dépense ?',
+          message: 'Cette action est irréversible.',
+          danger: true,
+          onConfirm: () => {
+            Store.deleteDepenseChantier(chantierId, depId);
+            Toast.success('Dépense supprimée');
+            this._refreshDepenses(chantierId);
+          }
+        });
+      });
+    });
+  },
+
+  _refreshDepenses(chantierId) {
+    const section = document.getElementById('depensesSection');
+    if (section) {
+      section.innerHTML = this._renderBilanDepenses(chantierId);
+      this._bindDepensesEvents(chantierId);
+    }
+  },
+
+  _openDepenseForm(chantierId, depenseId = null) {
+    const chantier = Store.state.chantiers.find(c => c.id === chantierId);
+    const existing = depenseId ? (chantier.depensesManuelles || []).find(d => d.id === depenseId) : null;
+    const d = existing || { libelle: '', montant: '', categorie: 'autre', date: new Date().toISOString().split('T')[0] };
+
+    const CATS = [
+      ['location', '🏗️ Location'],
+      ['carburant', '⛽ Carburant'],
+      ['main-oeuvre', "👷 Main d'œuvre"],
+      ['sous-traitance', '🤝 Sous-traitance'],
+      ['autre', '📋 Autre']
+    ];
+
+    Modal.open({
+      title: existing ? 'Modifier la dépense' : 'Nouvelle dépense',
+      size: 'small',
+      body: `
+        <div class="form-grid">
+          <div class="form-field form-field--full">
+            <label>Libellé *</label>
+            <input id="dep_libelle" class="form-input" value="${Helpers.esc(d.libelle)}" placeholder="Ex: Location nacelle 3 jours" autofocus>
+          </div>
+          <div class="form-field">
+            <label>Montant (€ HT) *</label>
+            <input id="dep_montant" class="form-input mono" type="number" min="0" step="0.01" value="${d.montant}" placeholder="200">
+          </div>
+          <div class="form-field">
+            <label>Date</label>
+            <input id="dep_date" class="form-input" type="date" value="${d.date}">
+          </div>
+          <div class="form-field form-field--full">
+            <label>Catégorie</label>
+            <select id="dep_categorie" class="form-select">
+              ${CATS.map(([val, lab]) => `<option value="${val}" ${d.categorie === val ? 'selected' : ''}>${lab}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>
+        <button class="btn btn--primary" id="depSave">${existing ? 'Mettre à jour' : 'Ajouter'}</button>
+      `,
+      onOpen: () => {
+        document.getElementById('depSave').addEventListener('click', () => {
+          const data = {
+            libelle: document.getElementById('dep_libelle').value.trim(),
+            montant: parseFloat(document.getElementById('dep_montant').value) || 0,
+            date: document.getElementById('dep_date').value,
+            categorie: document.getElementById('dep_categorie').value
+          };
+          if (!data.libelle) { Toast.warning('Le libellé est requis'); return; }
+          if (data.montant <= 0) { Toast.warning('Le montant doit être supérieur à 0'); return; }
+
+          if (existing) {
+            Store.updateDepenseChantier(chantierId, existing.id, data);
+            Toast.success('Dépense mise à jour');
+          } else {
+            Store.addDepenseChantier(chantierId, data);
+            Toast.success('Dépense ajoutée');
+          }
+          Modal.close();
+          this._refreshDepenses(chantierId);
+        });
+      }
+    });
+  },
+
   openDetail(id) {
     const c = Store.getChantier(id);
     if (!c) return;
@@ -765,6 +931,10 @@ const Chantiers = {
           <div style="background:var(--bg-sunken);padding:var(--s-3);border-radius:var(--r-md);white-space:pre-wrap;color:var(--txt-secondary)">${Helpers.esc(c.notes)}</div>
         </div>
       ` : ''}
+
+      <div class="detail-section" id="depensesSection">
+        ${this._renderBilanDepenses(id)}
+      </div>
     `;
 
     Modal.open({
@@ -780,6 +950,7 @@ const Chantiers = {
 
     $('#detEdit').addEventListener('click', () => { Modal.close(); setTimeout(() => this.openEdit(id), 100); });
     $('#detPdf').addEventListener('click', () => PdfExport.chantier(id));
+    this._bindDepensesEvents(id);
     $('#detDelete').addEventListener('click', async () => {
       const ok = await Modal.confirm({
         title: 'Supprimer ce chantier ?',
