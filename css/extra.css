@@ -2077,6 +2077,91 @@ a.btn-icon:hover {
   border-top: 1px solid var(--border-subtle);
 }
 
+/* ========== BILAN DÉPENSES CHANTIER ========== */
+.bilan-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--s-2);
+  margin-bottom: var(--s-4);
+}
+.bilan-card {
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bilan-card__label {
+  font-size: var(--fs-xs);
+  color: var(--txt-muted);
+}
+.bilan-card__value {
+  font-size: var(--fs-lg);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+}
+.bilan-card--total {
+  background: var(--txt-primary);
+  border-color: var(--txt-primary);
+}
+.bilan-card--total .bilan-card__label,
+.bilan-card--total .bilan-card__value {
+  color: var(--bg-base, #fff);
+}
+[data-theme="dark"] .bilan-card--total {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+[data-theme="dark"] .bilan-card--total .bilan-card__label,
+[data-theme="dark"] .bilan-card--total .bilan-card__value {
+  color: #fff;
+}
+
+.depenses-manuelles__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--s-2);
+}
+.depenses-manuelles__head strong {
+  font-size: var(--fs-sm);
+  color: var(--txt-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.depenses-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.depense-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 8px 12px;
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+}
+.depense-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.depense-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.depense-info strong {
+  font-size: var(--fs-sm);
+}
+.depense-montant {
+  font-weight: 700;
+  color: #3b82f6;
+}
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
