@@ -158,5 +158,50 @@ window.ExcelExport = (function () {
     return parts.length ? '_' + parts.join('-') : '';
   }
 
-  return { chantiers, clients, stocks, mouvements };
+  function reservationsEngins(filter = null) {
+    const XLSX = getXLSX();
+    if (!XLSX) { Toast.error('Bibliothèque Excel non chargée'); return; }
+
+    let resas = (Store.state.reservationsEngins || []).slice();
+    if (filter && (filter.month != null || filter.year != null)) {
+      resas = resas.filter(r => {
+        const d = new Date(r.dateDebut);
+        if (filter.year != null && d.getFullYear() !== filter.year) return false;
+        if (filter.month != null && d.getMonth() !== filter.month) return false;
+        return true;
+      });
+    }
+    resas.sort((a, b) => new Date(b.dateDebut) - new Date(a.dateDebut));
+
+    if (resas.length === 0) { Toast.warning('Aucune réservation pour cette période'); return; }
+
+    const rows = resas.map(r => {
+      const engin = Store.state.engins.find(e => e.id === r.enginId);
+      const chantier = Store.state.chantiers.find(c => c.id === r.chantierId);
+      const jours = Math.max(1, Math.round((new Date(r.dateFin) - new Date(r.dateDebut)) / 86400000) + 1);
+      const cout = (engin?.coutJournalier || 0) * jours;
+      return {
+        'Date début': r.dateDebut,
+        'Date fin': r.dateFin,
+        'Durée (jours)': jours,
+        'Engin': engin?.nom || '',
+        'Disponibilité': engin?.disponibilite === 'location' ? 'Location' : 'Atelier',
+        'Loueur': engin?.proprietaire || '',
+        'Chantier': chantier?.numero || '',
+        'Coût/jour': engin?.coutJournalier || 0,
+        'Coût total': cout,
+        'Notes': r.notes || ''
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 22 }, { wch: 14 }, { wch: 18 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 30 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Réservations');
+    const suffix = filterSuffix(filter);
+    XLSX.writeFile(wb, `reservations_engins${suffix}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    Toast.success('Excel téléchargé');
+  }
+
+  return { chantiers, clients, stocks, mouvements, reservationsEngins };
 })();
