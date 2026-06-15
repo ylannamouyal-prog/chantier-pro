@@ -277,6 +277,115 @@ window.PdfExport = (function () {
       doc.setTextColor(15, 23, 42);
     }
 
+    // BILAN DÉPENSES COMPLET (commandes chantier + dépenses manuelles + total)
+    if (doc.autoTable) {
+      const bilan = Store.getBilanChantier ? Store.getBilanChantier(id) : null;
+      if (bilan) {
+        // Commandes chantier réelles
+        if (bilan.commandes.length > 0) {
+          if (y > 230) { doc.addPage(); y = margin; }
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(100, 116, 139);
+          doc.text('COMMANDES PASSÉES POUR CE CHANTIER', margin, y);
+          y += 3;
+
+          const cmdRows = [];
+          bilan.commandes.forEach(c => {
+            (c.lignes || []).forEach(l => {
+              cmdRows.push([
+                c.numero,
+                l.designation,
+                l.quantite + ' ' + (l.unite || ''),
+                (l.prixUnitaire || 0).toFixed(2) + ' €',
+                (l.quantite * (l.prixUnitaire || 0)).toFixed(2) + ' €'
+              ]);
+            });
+          });
+
+          doc.autoTable({
+            startY: y + 2,
+            head: [['Commande', 'Désignation', 'Qté', 'PU HT', 'Total HT']],
+            body: cmdRows,
+            foot: [['', '', '', 'SOUS-TOTAL', bilan.totalCommandes.toFixed(2) + ' €']],
+            theme: 'striped',
+            headStyles: { fillColor: [245, 158, 11], textColor: 255, fontStyle: 'bold' },
+            footStyles: { fillColor: [241, 245, 249], textColor: 15, fontStyle: 'bold' },
+            styles: { fontSize: 9, cellPadding: 3 },
+            columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+            margin: { left: margin, right: margin }
+          });
+          y = doc.lastAutoTable.finalY + 6;
+        }
+
+        // Dépenses manuelles
+        if (bilan.manuelles.length > 0) {
+          if (y > 230) { doc.addPage(); y = margin; }
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(100, 116, 139);
+          doc.text('AUTRES DÉPENSES', margin, y);
+          y += 3;
+
+          const CATS = {
+            'location': 'Location', 'carburant': 'Carburant',
+            'main-oeuvre': "Main d'œuvre", 'sous-traitance': 'Sous-traitance', 'autre': 'Autre'
+          };
+
+          doc.autoTable({
+            startY: y + 2,
+            head: [['Libellé', 'Catégorie', 'Date', 'Montant HT']],
+            body: bilan.manuelles.map(d => [
+              d.libelle,
+              CATS[d.categorie] || 'Autre',
+              d.date ? Format.dateShort(d.date) : '—',
+              (parseFloat(d.montant) || 0).toFixed(2) + ' €'
+            ]),
+            foot: [['', '', 'SOUS-TOTAL', bilan.totalManuelles.toFixed(2) + ' €']],
+            theme: 'striped',
+            headStyles: { fillColor: [139, 92, 246], textColor: 255, fontStyle: 'bold' },
+            footStyles: { fillColor: [241, 245, 249], textColor: 15, fontStyle: 'bold' },
+            styles: { fontSize: 9, cellPadding: 3 },
+            columnStyles: { 3: { halign: 'right' } },
+            margin: { left: margin, right: margin }
+          });
+          y = doc.lastAutoTable.finalY + 6;
+        }
+
+        // BILAN TOTAL (encadré)
+        if (bilan.totalGeneral > 0) {
+          if (y > 250) { doc.addPage(); y = margin; }
+          const lineH = 7;
+          const boxH = 8 + lineH * 4;
+          doc.setFillColor(248, 250, 252);
+          doc.setDrawColor(15, 23, 42);
+          doc.rect(margin, y, pageWidth - 2 * margin, boxH, 'FD');
+
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(60, 70, 90);
+          let ly = y + 7;
+          const lineItem = (label, val, bold) => {
+            doc.setFont('helvetica', bold ? 'bold' : 'normal');
+            if (bold) { doc.setFontSize(12); doc.setTextColor(15, 23, 42); }
+            doc.text(label, margin + 4, ly);
+            doc.text(val, pageWidth - margin - 4, ly, { align: 'right' });
+            ly += lineH;
+            if (bold) { doc.setFontSize(10); doc.setTextColor(60, 70, 90); }
+          };
+          lineItem('Fournitures estimées', bilan.totalFournitures.toFixed(2) + ' €');
+          lineItem('Commandes chantier', bilan.totalCommandes.toFixed(2) + ' €');
+          lineItem('Autres dépenses', bilan.totalManuelles.toFixed(2) + ' €');
+          // ligne séparation
+          doc.setDrawColor(200, 205, 215);
+          doc.line(margin + 4, ly - 4, pageWidth - margin - 4, ly - 4);
+          lineItem('COÛT TOTAL DU CHANTIER (HT)', bilan.totalGeneral.toFixed(2) + ' €', true);
+          y += boxH + 6;
+          doc.setTextColor(15, 23, 42);
+        }
+      }
+    }
+
     // Engins
     if (reservations.length > 0) {
       if (y > 240) { doc.addPage(); y = margin; }
@@ -620,5 +729,5 @@ window.PdfExport = (function () {
     Toast.success('État du stock PDF généré');
   }
 
-  return { chantier, planning, mouvements, stockEtat };
+  return { chantier, planning, mouvements, stockEtat, computeFournituresChantier };
 })();
