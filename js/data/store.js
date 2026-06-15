@@ -107,6 +107,7 @@ const Store = {
       dateDebut: null,
       dateFin: null,
       notes: '',
+      depensesManuelles: [],   // [{id, libelle, montant, categorie, date}]
       ...data,
       createdAt: new Date().toISOString()
     };
@@ -119,6 +120,79 @@ const Store = {
       const c = s.chantiers.find(x => x.id === id);
       if (c) Object.assign(c, patch, { updatedAt: new Date().toISOString() });
     });
+  },
+
+  // ============================================================
+  // DÉPENSES MANUELLES D'UN CHANTIER
+  // ============================================================
+  addDepenseChantier(chantierId, depense) {
+    const d = {
+      id: Helpers.uid('dep_'),
+      libelle: '',
+      montant: 0,
+      categorie: 'autre',  // 'location' | 'carburant' | 'main-oeuvre' | 'sous-traitance' | 'autre'
+      date: new Date().toISOString().split('T')[0],
+      ...depense
+    };
+    this.commit('chantier:addDepense', s => {
+      const c = s.chantiers.find(x => x.id === chantierId);
+      if (!c) return;
+      if (!c.depensesManuelles) c.depensesManuelles = [];
+      c.depensesManuelles.push(d);
+    });
+    return d;
+  },
+
+  updateDepenseChantier(chantierId, depenseId, patch) {
+    this.commit('chantier:updateDepense', s => {
+      const c = s.chantiers.find(x => x.id === chantierId);
+      if (!c || !c.depensesManuelles) return;
+      const d = c.depensesManuelles.find(x => x.id === depenseId);
+      if (d) Object.assign(d, patch);
+    });
+  },
+
+  deleteDepenseChantier(chantierId, depenseId) {
+    this.commit('chantier:deleteDepense', s => {
+      const c = s.chantiers.find(x => x.id === chantierId);
+      if (!c || !c.depensesManuelles) return;
+      c.depensesManuelles = c.depensesManuelles.filter(x => x.id !== depenseId);
+    });
+  },
+
+  /**
+   * Calcule le bilan complet des dépenses d'un chantier.
+   * Retourne { fournitures: [...], commandes: [...], manuelles: [...],
+   *            totalFournitures, totalCommandes, totalManuelles, totalGeneral }
+   */
+  getBilanChantier(chantierId) {
+    const chantier = this.state.chantiers.find(c => c.id === chantierId);
+    if (!chantier) return null;
+
+    // 1) Fournitures estimées depuis les cotes
+    const cotes = this.getCotesByChantier(chantierId);
+    let fournitures = [];
+    let totalFournitures = 0;
+    if (window.PdfExport && typeof PdfExport.computeFournituresChantier === 'function') {
+      fournitures = PdfExport.computeFournituresChantier(cotes);
+      totalFournitures = fournitures.reduce((s, f) => s + (f.total || 0), 0);
+    }
+
+    // 2) Commandes réelles passées pour ce chantier
+    const commandes = (this.state.commandes || [])
+      .filter(c => c.chantierId === chantierId && c.statut !== 'annulee');
+    const totalCommandes = commandes.reduce((s, c) =>
+      s + (c.lignes || []).reduce((ls, l) => ls + (l.quantite * (l.prixUnitaire || 0)), 0), 0);
+
+    // 3) Dépenses manuelles
+    const manuelles = chantier.depensesManuelles || [];
+    const totalManuelles = manuelles.reduce((s, d) => s + (parseFloat(d.montant) || 0), 0);
+
+    return {
+      fournitures, commandes, manuelles,
+      totalFournitures, totalCommandes, totalManuelles,
+      totalGeneral: totalFournitures + totalCommandes + totalManuelles
+    };
   },
 
   deleteChantier(id) {
