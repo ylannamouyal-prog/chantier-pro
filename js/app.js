@@ -179,6 +179,7 @@
     // Search
     window.Search?.init();
     window.Notifications?.init();
+    document.getElementById('journalBtn')?.addEventListener('click', () => window.Journal?.open());
   }
 
   function updateBadges() {
