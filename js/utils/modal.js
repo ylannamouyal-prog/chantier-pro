@@ -40,6 +40,12 @@ const Modal = {
       setTimeout(onOpen, 0);
     }
 
+    // Améliore les menus déroulants longs avec une recherche (après le onOpen
+    // pour capturer aussi les selects injectés dynamiquement par le formulaire)
+    setTimeout(() => {
+      try { window.SearchableSelect?.enhanceAll(bodyEl); } catch (e) { /* silencieux */ }
+    }, 10);
+
     return { backdrop, modal, body: bodyEl, footer: footerEl };
   },
 
