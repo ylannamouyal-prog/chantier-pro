@@ -62,6 +62,8 @@
         try {
           if (route.needsParam) mod.render(view, param);
           else mod.render(view);
+          // Améliore les menus déroulants longs présents dans la vue (filtres, etc.)
+          setTimeout(() => { try { window.SearchableSelect?.enhanceAll(view); } catch (e) {} }, 20);
         } catch (err) {
           console.error(err);
           view.innerHTML = `<div class="empty-state"><h2>Erreur</h2><p>${err.message}</p></div>`;
