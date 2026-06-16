@@ -19,6 +19,7 @@ const Store = {
     engins:       [],       // engins/nacelles
     reservationsEngins: [], // { id, enginId, chantierId, dateDebut, dateFin }
     fournisseurs: [],
+    categoriesFournisseurs: [], // liste gérable de catégories fournisseurs
     commandes:    [],       // bons de commande fournisseurs
     rdvs:         [],       // rendez-vous (visites, métrés, etc.)
     modeles:      [],       // modèles de chantier (bibliothèque de fournitures par type)
@@ -27,6 +28,7 @@ const Store = {
     personnel:    [],       // personnel complet : conducteurs, chefs, ouvriers, alternants
     absences:     [],       // congés, maladie, formation, etc.
     typesAbsence: [],       // types personnalisés en plus des types par défaut
+    journal:      [],       // journal automatique des actions
     rendezVous:   [],       // rendez-vous (métré, visite, livraison...)
     parametres: {
       entreprise: {
@@ -86,7 +88,55 @@ const Store = {
   commit(action, mutator) {
     mutator(this.state);
     this.save();
+    this._autoJournal(action);
     this._notify(action, this.state);
+  },
+
+  /** Génère une entrée de journal lisible selon l'action (sauf pour le journal lui-même) */
+  _autoJournal(action) {
+    if (!action || action.startsWith('journal:')) return;
+    const labels = {
+      'chantier:add': '🏗️ Chantier créé',
+      'chantier:update': '🏗️ Chantier modifié',
+      'chantier:delete': '🗑️ Chantier supprimé',
+      'chantier:addDepense': '💰 Dépense ajoutée à un chantier',
+      'client:add': '👤 Client créé',
+      'client:update': '👤 Client modifié',
+      'client:delete': '🗑️ Client supprimé',
+      'fournisseur:add': '🏢 Fournisseur créé',
+      'fournisseur:update': '🏢 Fournisseur modifié',
+      'fournisseur:delete': '🗑️ Fournisseur supprimé',
+      'commande:add': '📦 Commande créée',
+      'commande:update': '📦 Commande modifiée',
+      'commande:livree': '✅ Commande livrée',
+      'engin:add': '🚜 Engin ajouté',
+      'engin:update': '🚜 Engin modifié',
+      'engin:delete': '🗑️ Engin supprimé',
+      'engin:reserve': '📅 Engin réservé',
+      'personnel:add': '👷 Personne ajoutée au personnel',
+      'personnel:update': '👷 Personne modifiée',
+      'personnel:delete': '🗑️ Personne supprimée',
+      'absence:add': '🌴 Absence enregistrée',
+      'absence:delete': '🗑️ Absence supprimée',
+      'equipe:add': '◈ Équipe créée',
+      'equipe:update': '◈ Équipe modifiée',
+      'equipe:delete': '🗑️ Équipe supprimée',
+      'cote:add': '📐 Cote ajoutée',
+      'modele:add': '📋 Modèle créé',
+      'rdv:add': '📅 Rendez-vous créé'
+    };
+    const label = labels[action];
+    if (!label) return; // on ne journalise que les actions "importantes"
+    if (!this.state.journal) this.state.journal = [];
+    this.state.journal.unshift({
+      id: Helpers.uid('log_'),
+      message: label,
+      type: 'auto',
+      date: new Date().toISOString()
+    });
+    if (this.state.journal.length > 200) {
+      this.state.journal = this.state.journal.slice(0, 200);
+    }
   },
 
   // ============================================================
@@ -639,6 +689,70 @@ const Store = {
     this.commit('fournisseur:delete', s => {
       s.fournisseurs = s.fournisseurs.filter(f => f.id !== id);
     });
+  },
+
+  // ============================================================
+  // CATÉGORIES FOURNISSEURS (liste gérable)
+  // ============================================================
+  getCategoriesFournisseurs() {
+    return this.state.categoriesFournisseurs || [];
+  },
+
+  addCategorieFournisseur(nom) {
+    const clean = (nom || '').trim();
+    if (!clean) return null;
+    // Éviter les doublons
+    if ((this.state.categoriesFournisseurs || []).some(c => c.nom.toLowerCase() === clean.toLowerCase())) {
+      return null;
+    }
+    const cat = { id: Helpers.uid('catf_'), nom: clean };
+    this.commit('catFournisseur:add', s => {
+      if (!s.categoriesFournisseurs) s.categoriesFournisseurs = [];
+      s.categoriesFournisseurs.push(cat);
+    });
+    return cat;
+  },
+
+  deleteCategorieFournisseur(id) {
+    this.commit('catFournisseur:delete', s => {
+      if (!s.categoriesFournisseurs) return;
+      const cat = s.categoriesFournisseurs.find(c => c.id === id);
+      s.categoriesFournisseurs = s.categoriesFournisseurs.filter(c => c.id !== id);
+      // Retirer cette catégorie des fournisseurs qui l'utilisent
+      if (cat) {
+        s.fournisseurs.forEach(f => {
+          if (Array.isArray(f.categories)) {
+            f.categories = f.categories.filter(c => c !== cat.nom && c !== id);
+          }
+        });
+      }
+    });
+  },
+
+  // ============================================================
+  // JOURNAL DES ACTIONS (automatique)
+  // ============================================================
+  logAction(message, type = 'info') {
+    if (!this.state.journal) this.state.journal = [];
+    this.state.journal.unshift({
+      id: Helpers.uid('log_'),
+      message,
+      type,
+      date: new Date().toISOString()
+    });
+    // Limiter à 200 entrées pour ne pas saturer le stockage
+    if (this.state.journal.length > 200) {
+      this.state.journal = this.state.journal.slice(0, 200);
+    }
+    this.save();
+  },
+
+  getJournal(limit = 100) {
+    return (this.state.journal || []).slice(0, limit);
+  },
+
+  clearJournal() {
+    this.commit('journal:clear', s => { s.journal = []; });
   },
 
   // ============================================================
