@@ -32,13 +32,14 @@ window.Fournisseurs = (function () {
 
   function renderCard(f) {
     const refs = (f.references || []).length;
+    const cats = getCatsArray(f);
     return `
       <div class="fournisseur-card" data-fournisseur-id="${f.id}">
         <div class="fournisseur-card__header">
           <div class="fournisseur-icon">🏭</div>
           <div>
             <h3>${Helpers.esc(f.nom)}</h3>
-            ${f.categorie ? `<span class="badge badge--info">${Helpers.esc(f.categorie)}</span>` : ''}
+            ${cats.length > 0 ? `<div class="fournisseur-cats">${cats.map(c => `<span class="badge badge--info">${Helpers.esc(c)}</span>`).join(' ')}</div>` : ''}
           </div>
         </div>
         <div class="fournisseur-card__meta">
@@ -57,9 +58,20 @@ window.Fournisseurs = (function () {
     `;
   }
 
+  /** Retourne les catégories d'un fournisseur sous forme de tableau (compat ancien champ texte) */
+  function getCatsArray(f) {
+    const cats = Array.isArray(f.categories) ? f.categories.slice() : [];
+    if (f.categorie && !cats.includes(f.categorie)) cats.push(f.categorie);
+    return cats;
+  }
+
   function openForm(id = null) {
     const existing = id ? Store.state.fournisseurs.find(f => f.id === id) : null;
-    const f = existing || { nom: '', categorie: '', contact: '', telephone: '', email: '', adresse: '', delaiLivraison: 7, notes: '' };
+    const f = existing || { nom: '', categories: [], contact: '', telephone: '', email: '', adresse: '', delaiLivraison: 7, notes: '' };
+
+    // Compat : ancien champ "categorie" (texte unique) → migrer vers categories[]
+    let selectedCats = Array.isArray(f.categories) ? f.categories.slice() : [];
+    if (f.categorie && !selectedCats.includes(f.categorie)) selectedCats.push(f.categorie);
 
     Modal.open({
       title: existing ? 'Modifier le fournisseur' : 'Nouveau fournisseur',
@@ -70,12 +82,13 @@ window.Fournisseurs = (function () {
             <label>Nom *</label>
             <input id="f_nom" class="form-input" value="${Helpers.esc(f.nom)}" autofocus>
           </div>
-          <div class="form-field">
-            <label>Catégorie</label>
-            <select id="f_cat" class="form-select">
-              ${['', 'Vitrage', 'Quincaillerie', 'Bois', 'Stores', 'Outillage', 'Multi-produits', 'Autre']
-                .map(c => `<option value="${c}" ${f.categorie === c ? 'selected' : ''}>${c || '—'}</option>`).join('')}
-            </select>
+          <div class="form-field form-field--full">
+            <label>Catégories</label>
+            <div id="catChecklist" class="cat-checklist">${renderCatChecklist(selectedCats)}</div>
+            <div class="cat-add-row">
+              <input id="newCatInput" class="form-input" placeholder="Nouvelle catégorie (ex: Vitrage)">
+              <button type="button" class="btn btn--ghost btn--sm" id="addCatBtn">+ Ajouter</button>
+            </div>
           </div>
           <div class="form-field">
             <label>Délai livraison (jours)</label>
@@ -108,10 +121,60 @@ window.Fournisseurs = (function () {
         <button class="btn btn--primary" id="fSave">${existing ? 'Mettre à jour' : 'Créer'}</button>
       `,
       onOpen: () => {
+        const refreshChecklist = () => {
+          document.getElementById('catChecklist').innerHTML = renderCatChecklist(selectedCats);
+          bindChecklistEvents();
+        };
+        const bindChecklistEvents = () => {
+          document.querySelectorAll('#catChecklist input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', () => {
+              const nom = cb.value;
+              if (cb.checked) {
+                if (!selectedCats.includes(nom)) selectedCats.push(nom);
+              } else {
+                selectedCats = selectedCats.filter(c => c !== nom);
+              }
+            });
+          });
+          document.querySelectorAll('#catChecklist [data-del-cat]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const catId = btn.dataset.delCat;
+              const cat = Store.getCategoriesFournisseurs().find(c => c.id === catId);
+              Modal.confirm({
+                title: 'Supprimer cette catégorie ?',
+                message: `"${cat?.nom}" sera retirée de la liste et de tous les fournisseurs qui l'utilisent.`,
+                danger: true,
+                onConfirm: () => {
+                  Store.deleteCategorieFournisseur(catId);
+                  if (cat) selectedCats = selectedCats.filter(c => c !== cat.nom);
+                  refreshChecklist();
+                  Toast.success('Catégorie supprimée');
+                }
+              });
+            });
+          });
+        };
+        bindChecklistEvents();
+
+        document.getElementById('addCatBtn').addEventListener('click', () => {
+          const input = document.getElementById('newCatInput');
+          const nom = input.value.trim();
+          if (!nom) { Toast.warning('Entrez un nom de catégorie'); return; }
+          const cat = Store.addCategorieFournisseur(nom);
+          if (!cat) { Toast.warning('Cette catégorie existe déjà'); return; }
+          selectedCats.push(cat.nom);
+          input.value = '';
+          refreshChecklist();
+          Toast.success('Catégorie ajoutée');
+        });
+        document.getElementById('newCatInput').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); document.getElementById('addCatBtn').click(); }
+        });
+
         document.getElementById('fSave').addEventListener('click', () => {
           const data = {
             nom: document.getElementById('f_nom').value.trim(),
-            categorie: document.getElementById('f_cat').value,
+            categories: selectedCats,
             contact: document.getElementById('f_contact').value.trim(),
             telephone: document.getElementById('f_tel').value.trim(),
             email: document.getElementById('f_email').value.trim(),
@@ -134,6 +197,20 @@ window.Fournisseurs = (function () {
     });
   }
 
+  function renderCatChecklist(selectedCats) {
+    const cats = Store.getCategoriesFournisseurs();
+    if (cats.length === 0) {
+      return '<p class="hint">Aucune catégorie pour l\'instant. Ajoutez-en une ci-dessous.</p>';
+    }
+    return cats.map(c => `
+      <label class="cat-check-item">
+        <input type="checkbox" value="${Helpers.esc(c.nom)}" ${selectedCats.includes(c.nom) ? 'checked' : ''}>
+        <span>${Helpers.esc(c.nom)}</span>
+        <button type="button" class="cat-del-btn" data-del-cat="${c.id}" title="Supprimer cette catégorie">✕</button>
+      </label>
+    `).join('');
+  }
+
   function openDetail(id) {
     const f = Store.state.fournisseurs.find(x => x.id === id);
     if (!f) return;
@@ -151,7 +228,7 @@ window.Fournisseurs = (function () {
         <div class="detail-section">
           <h3>Informations</h3>
           <dl class="detail-list">
-            ${f.categorie ? `<dt>Catégorie</dt><dd><span class="badge badge--info">${Helpers.esc(f.categorie)}</span></dd>` : ''}
+            ${getCatsArray(f).length > 0 ? `<dt>Catégories</dt><dd>${getCatsArray(f).map(c => `<span class="badge badge--info">${Helpers.esc(c)}</span>`).join(' ')}</dd>` : ''}
             ${f.contact ? `<dt>Contact</dt><dd>${Helpers.esc(f.contact)}</dd>` : ''}
             ${f.telephone ? `<dt>Téléphone</dt><dd>${Format.phone(f.telephone)}</dd>` : ''}
             ${f.email ? `<dt>Email</dt><dd><a href="mailto:${Helpers.esc(f.email)}">${Helpers.esc(f.email)}</a></dd>` : ''}
