@@ -2446,6 +2446,41 @@ a.btn-icon:hover {
   font-size: var(--fs-sm);
 }
 
+/* ========== PÉRIODES ÉCOLE (alternants) ========== */
+.ecole-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2);
+}
+.ecole-section-head h3 { margin: 0; }
+.ecole-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--s-2);
+}
+.ecole-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 8px 12px;
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+  border-left: 3px solid #ec4899;
+}
+.ecole-row__icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.ecole-row__info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ecole-row__info strong { font-size: var(--fs-sm); }
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
