@@ -291,10 +291,14 @@ window.Personnel = (function () {
       .map(eqId => Store.state.equipes.find(e => e.id === eqId))
       .filter(Boolean);
 
-    // Absences passées et futures
+    // Absences passées et futures (hors école, qui a sa propre section)
     const allAbsences = (Store.state.absences || [])
-      .filter(a => a.personnelId === p.id)
+      .filter(a => a.personnelId === p.id && a.typeId !== 'ecole')
       .sort((a, b) => new Date(b.dateDebut) - new Date(a.dateDebut));
+
+    // Périodes d'école (pour les alternants)
+    const isAlternant = p.role === 'alternant';
+    const periodesEcole = Store.getPeriodesEcole ? Store.getPeriodesEcole(p.id) : [];
 
     // Chantiers liés (en tant que conducteur)
     const chantiers = Store.state.chantiers.filter(c =>
@@ -341,6 +345,37 @@ window.Personnel = (function () {
             ` : ''}
           </dl>
         </div>
+
+        ${isAlternant ? `
+          <div class="detail-section">
+            <div class="ecole-section-head">
+              <h3>🎓 Périodes à l'école <span class="hint">(${periodesEcole.length})</span></h3>
+              <button class="btn btn--ghost btn--sm" id="addEcoleBtn">+ Ajouter une période</button>
+            </div>
+            ${periodesEcole.length === 0 ? '<p class="hint">Aucune période d\'école enregistrée. Ajoutez les dates où l\'alternant est en cours.</p>' : `
+              <div class="ecole-list">
+                ${periodesEcole.map(a => {
+                  const now = new Date(); now.setHours(0,0,0,0);
+                  const debut = new Date(a.dateDebut);
+                  const fin = new Date(a.dateFin);
+                  const status = now < debut ? 'À venir' : now > fin ? 'Terminée' : 'En cours';
+                  const statusClass = now < debut ? 'info' : now > fin ? 'default' : 'warning';
+                  return `
+                    <div class="ecole-row" data-ecole-id="${a.id}">
+                      <span class="ecole-row__icon">🎓</span>
+                      <div class="ecole-row__info">
+                        <strong>${Format.dateShort(a.dateDebut)} → ${Format.dateShort(a.dateFin)}</strong>
+                        ${a.notes ? `<span class="hint">${Helpers.esc(a.notes)}</span>` : ''}
+                      </div>
+                      <span class="badge badge--${statusClass}">${status}</span>
+                      <button class="btn-icon btn-icon--danger" data-del-ecole="${a.id}" title="Supprimer">🗑</button>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+        ` : ''}
 
         <div class="detail-section">
           <h3>🌴 Absences <span class="hint">(${allAbsences.length})</span></h3>
@@ -414,6 +449,69 @@ window.Personnel = (function () {
             Modal.close();
             window.Chantiers?.openDetail?.(el.dataset.chantier);
           });
+        });
+
+        // Boutons périodes école
+        document.getElementById('addEcoleBtn')?.addEventListener('click', () => {
+          _openEcoleForm(p.id);
+        });
+        document.querySelectorAll('[data-del-ecole]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const ecoleId = btn.dataset.delEcole;
+            Modal.confirm({
+              title: 'Supprimer cette période ?',
+              message: 'Cette période à l\'école sera retirée du planning.',
+              danger: true,
+              onConfirm: () => {
+                Store.deleteAbsence(ecoleId);
+                Toast.success('Période supprimée');
+                Modal.close();
+                setTimeout(() => openDetail(p.id), 100);
+              }
+            });
+          });
+        });
+      }
+    });
+  }
+
+  // Formulaire d'ajout d'une période d'école
+  function _openEcoleForm(personnelId) {
+    const today = new Date().toISOString().split('T')[0];
+    Modal.open({
+      title: '🎓 Nouvelle période à l\'école',
+      size: 'small',
+      body: `
+        <div class="form-grid">
+          <div class="form-field">
+            <label>Date de début *</label>
+            <input id="ec_debut" class="form-input" type="date" value="${today}">
+          </div>
+          <div class="form-field">
+            <label>Date de fin *</label>
+            <input id="ec_fin" class="form-input" type="date" value="${today}">
+          </div>
+          <div class="form-field form-field--full">
+            <label>Notes (optionnel)</label>
+            <input id="ec_notes" class="form-input" placeholder="Ex: Semaine de cours, examens...">
+          </div>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>
+        <button class="btn btn--primary" id="ecSave">Ajouter</button>
+      `,
+      onOpen: () => {
+        document.getElementById('ecSave').addEventListener('click', () => {
+          const debut = document.getElementById('ec_debut').value;
+          const fin = document.getElementById('ec_fin').value;
+          const notes = document.getElementById('ec_notes').value.trim();
+          if (!debut || !fin) { Toast.warning('Les dates sont requises'); return; }
+          if (debut > fin) { Toast.warning('La date de fin doit être après le début'); return; }
+          Store.addPeriodeEcole(personnelId, debut, fin, notes);
+          Toast.success('Période à l\'école ajoutée');
+          Modal.close();
+          setTimeout(() => openDetail(personnelId), 100);
         });
       }
     });
