@@ -226,6 +226,11 @@ window.Cotes = (function () {
               <span><strong>${cotes.length}</strong> cote${cotes.length > 1 ? 's' : ''}</span>
               ${totalUnits !== cotes.length ? `<span><strong>${totalUnits}</strong> unité${totalUnits > 1 ? 's' : ''}</span>` : ''}
               <span><strong>${totalSurface.toFixed(2)}</strong> m²</span>
+              ${(() => {
+                const modele = cat.modeleId ? (Store.state.modeles || []).find(m => m.id === cat.modeleId) : null;
+                if (modele) return `<span class="cat-ouvrage-badge">🔧 ${Helpers.esc(modele.nom)}</span>`;
+                return `<span class="cat-ouvrage-badge cat-ouvrage-badge--warning" title="Associez un ouvrage pour le calcul automatique (bouton ✎)">⚠️ Pas d'ouvrage associé</span>`;
+              })()}
             </div>
           </div>
           <div class="category-card__actions">
@@ -465,17 +470,31 @@ window.Cotes = (function () {
     const existing = categoryId
       ? (Store.state.categoriesCotes || []).find(c => c.id === categoryId)
       : null;
-    const cat = existing || { nom: '' };
+    const cat = existing || { nom: '', modeleId: null };
+
+    const modeles = Store.state.modeles || [];
 
     Modal.open({
-      title: existing ? 'Renommer la catégorie' : 'Nouvelle catégorie d\'ouvrage',
+      title: existing ? 'Modifier la catégorie' : 'Nouvelle catégorie d\'ouvrage',
       size: 'small',
       body: `
         <div class="form-grid">
           <div class="form-field form-field--full">
             <label>Nom de la catégorie *</label>
-            <input id="f_cat_nom" class="form-input" value="${Helpers.esc(cat.nom)}" placeholder="Ex: Vitrage, Menuiserie, Stores BSO..." autofocus>
+            <input id="f_cat_nom" class="form-input" value="${Helpers.esc(cat.nom)}" placeholder="Ex: Fenêtres salon, Vitrage RDC..." autofocus>
             <p class="hint" style="margin-top:4px">Choisissez un nom qui décrit le type d'ouvrage à réaliser dans cette catégorie.</p>
+          </div>
+          <div class="form-field form-field--full">
+            <label>Ouvrage associé (pour le calcul automatique)</label>
+            <select id="f_cat_modele" class="form-select">
+              <option value="">— Aucun (pas de calcul auto) —</option>
+              ${modeles.map(m => `<option value="${m.id}" ${cat.modeleId === m.id ? 'selected' : ''}>${Helpers.esc(m.nom)}${m.categorie ? ` (${Helpers.esc(m.categorie)})` : ''}</option>`).join('')}
+            </select>
+            <p class="hint" style="margin-top:4px">
+              ${modeles.length === 0
+                ? '⚠️ Aucun ouvrage défini. Créez-en dans la page "Ouvrages" pour activer le calcul automatique des fournitures.'
+                : 'En associant un ouvrage, les fournitures seront calculées automatiquement selon les dimensions saisies.'}
+            </p>
           </div>
         </div>
       `,
@@ -490,12 +509,13 @@ window.Cotes = (function () {
         });
         document.getElementById('catSave').addEventListener('click', () => {
           const nom = document.getElementById('f_cat_nom').value.trim();
+          const modeleId = document.getElementById('f_cat_modele').value || null;
           if (!nom) { Toast.warning('Le nom est requis'); return; }
           if (existing) {
-            Store.updateCategorieCote(existing.id, { nom });
-            Toast.success('Catégorie renommée');
+            Store.updateCategorieCote(existing.id, { nom, modeleId });
+            Toast.success('Catégorie mise à jour');
           } else {
-            const newCat = Store.addCategorieCote({ chantierId: currentChantierId, nom });
+            const newCat = Store.addCategorieCote({ chantierId: currentChantierId, nom, modeleId });
             expandedCategories.add(newCat.id);
             Toast.success('Catégorie créée');
           }
