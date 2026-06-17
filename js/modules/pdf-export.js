@@ -6,63 +6,56 @@ window.PdfExport = (function () {
 
   // ============================================================
   // CALCUL FOURNITURES ESTIMÉES D'UN CHANTIER
-  // Retourne un tableau de lignes { designation, quantite, unite, prixUnitaire, total }
+  // Basé sur les OUVRAGES (modèles) associés aux catégories de cotes.
+  // Pour chaque cote : surface = L×H×qté, périmètre = 2(L+H)×qté, nombre = qté.
+  // On applique le modèle de la catégorie pour calculer chaque fourniture.
+  // Retourne un tableau de lignes { designation, quantite, unite, prixUnitaire, total, prixSource }
   // ============================================================
   function computeFournituresChantier(cotes) {
-    const totalSurface = cotes.reduce((s, c) => s + (c.largeur * c.hauteur * (c.quantite || 1)) / 1000000, 0);
-    const totalUnits = cotes.reduce((s, c) => s + (c.quantite || 1), 0);
+    // Regroupe les quantités par fourniture (clé = fournitureId ou designation)
+    const accumulator = {};
 
-    // Estimations standard (issues du module Cotes)
-    const jointsMetres = totalSurface * 4;       // 4m de joint / m²
-    const parcloseMetres = totalSurface * 4;     // 4m de parclose / m²
-    const visUnits = Math.ceil(totalUnits * 8);  // 8 vis / unité
+    (cotes || []).forEach(cote => {
+      const cat = (Store.state.categoriesCotes || []).find(c => c.id === cote.categorieId);
+      if (!cat || !cat.modeleId) return; // pas de modèle associé → pas de calcul auto
 
-    // Cherche une fourniture correspondante dans le stock
-    function findFourniture(keywords) {
-      if (!Store.state.fournitures) return null;
-      return Store.state.fournitures.find(f => {
-        const haystack = `${(f.designation || f.nom || '').toLowerCase()} ${(f.reference || '').toLowerCase()} ${(f.categorie || '').toLowerCase()}`;
-        return keywords.some(kw => haystack.includes(kw.toLowerCase()));
+      const modele = (Store.state.modeles || []).find(m => m.id === cat.modeleId);
+      if (!modele || !modele.lignes) return;
+
+      const qte = cote.quantite || 1;
+      const largeur = (cote.largeur || 0) / 1000;  // mm → m
+      const hauteur = (cote.hauteur || 0) / 1000;  // mm → m
+      const surface = largeur * hauteur * qte;
+      const perimetre = 2 * (largeur + hauteur) * qte;
+
+      modele.lignes.forEach(ligne => {
+        const mode = ligne.mode || 'm2';
+        let quantite;
+        if (mode === 'm2') quantite = ligne.quantite * surface;
+        else if (mode === 'perimetre') quantite = ligne.quantite * perimetre;
+        else quantite = ligne.quantite * qte; // fixe
+
+        const key = ligne.fournitureId || ligne.designation;
+        if (!accumulator[key]) {
+          const fourn = Store.state.fournitures.find(f => f.id === ligne.fournitureId);
+          accumulator[key] = {
+            designation: ligne.designation || fourn?.nom || 'Fourniture',
+            quantite: 0,
+            unite: ligne.unite || fourn?.unite || 'u',
+            prixUnitaire: fourn?.prixUnitaire || 0,
+            prixSource: fourn?.prixUnitaire ? 'stock' : 'défaut'
+          };
+        }
+        accumulator[key].quantite += quantite;
       });
-    }
+    });
 
-    const jointFourn = findFourniture(['joint epdm', 'joint étanch', 'joint mousse', 'joint']);
-    const parcloseFourn = findFourniture(['parclose', 'baguette']);
-    const visFourn = findFourniture(['vis fixation', 'vis inox', 'vis']);
-
-    // Prix par défaut si aucune fourniture correspondante n'a un prix
-    const PRIX_DEFAUT = {
-      joint: 1.20,       // €/m
-      parclose: 3.50,    // €/m
-      vis: 0.10          // €/u
-    };
-
-    return [
-      {
-        designation: jointFourn?.designation || jointFourn?.nom || "Joint d'étanchéité",
-        quantite: jointsMetres,
-        unite: jointFourn?.unite || 'm',
-        prixUnitaire: jointFourn?.prixUnitaire || PRIX_DEFAUT.joint,
-        prixSource: jointFourn?.prixUnitaire ? 'stock' : 'défaut',
-        total: jointsMetres * (jointFourn?.prixUnitaire || PRIX_DEFAUT.joint)
-      },
-      {
-        designation: parcloseFourn?.designation || parcloseFourn?.nom || "Parclose",
-        quantite: parcloseMetres,
-        unite: parcloseFourn?.unite || 'm',
-        prixUnitaire: parcloseFourn?.prixUnitaire || PRIX_DEFAUT.parclose,
-        prixSource: parcloseFourn?.prixUnitaire ? 'stock' : 'défaut',
-        total: parcloseMetres * (parcloseFourn?.prixUnitaire || PRIX_DEFAUT.parclose)
-      },
-      {
-        designation: visFourn?.designation || visFourn?.nom || "Vis de fixation",
-        quantite: visUnits,
-        unite: visFourn?.unite || 'pcs',
-        prixUnitaire: visFourn?.prixUnitaire || PRIX_DEFAUT.vis,
-        prixSource: visFourn?.prixUnitaire ? 'stock' : 'défaut',
-        total: visUnits * (visFourn?.prixUnitaire || PRIX_DEFAUT.vis)
-      }
-    ];
+    // Transforme en tableau avec total
+    return Object.values(accumulator).map(item => ({
+      ...item,
+      quantite: Math.ceil(item.quantite * 100) / 100, // arrondi 2 décimales
+      total: item.quantite * item.prixUnitaire
+    }));
   }
 
   function chantier(id) {
