@@ -10,11 +10,11 @@ window.Modeles = (function () {
     container.innerHTML = `
       <div class="view-header">
         <div>
-          <h1 class="view-title">📋 Modèles de chantier</h1>
-          <p class="view-subtitle">${all.length} modèle${all.length > 1 ? 's' : ''} — bibliothèque de fournitures par type d'ouvrage</p>
+          <h1 class="view-title">📋 Ouvrages & consommations</h1>
+          <p class="view-subtitle">${all.length} ouvrage${all.length > 1 ? 's' : ''} — définissez les fournitures consommées pour calculer automatiquement vos chantiers</p>
         </div>
         <div class="view-header__actions">
-          <button class="btn btn--primary" id="modAdd">+ Nouveau modèle</button>
+          <button class="btn btn--primary" id="modAdd">+ Nouvel ouvrage</button>
         </div>
       </div>
 
@@ -24,9 +24,9 @@ window.Modeles = (function () {
 
       ${filtered.length === 0 ? UI.emptyState({
         icon: '📋',
-        title: searchQuery ? 'Aucun résultat' : 'Aucun modèle',
-        message: searchQuery ? 'Aucun modèle ne correspond à cette recherche.' : 'Créez vos premiers modèles pour calculer automatiquement les fournitures nécessaires sur vos chantiers.',
-        action: !searchQuery ? '<button class="btn btn--primary" onclick="Modeles._add()">+ Nouveau modèle</button>' : ''
+        title: searchQuery ? 'Aucun résultat' : 'Aucun ouvrage',
+        message: searchQuery ? 'Aucun ouvrage ne correspond à cette recherche.' : 'Créez vos types d\'ouvrages (fenêtre, vitrage, store, volet...) avec leurs fournitures pour calculer automatiquement les consommations sur vos chantiers.',
+        action: !searchQuery ? '<button class="btn btn--primary" onclick="Modeles._add()">+ Nouvel ouvrage</button>' : ''
       }) : `
         <div class="modeles-grid">
           ${filtered.map(renderCard).join('')}
@@ -69,7 +69,8 @@ window.Modeles = (function () {
   function renderCard(m) {
     const lignes = m.lignes || [];
     const fixCount = lignes.filter(l => l.mode === 'fixe').length;
-    const m2Count = lignes.filter(l => l.mode === 'm2').length;
+    const m2Count = lignes.filter(l => (l.mode || 'm2') === 'm2').length;
+    const perimCount = lignes.filter(l => l.mode === 'perimetre').length;
 
     return `
       <div class="modele-card" data-modele-id="${m.id}">
@@ -91,6 +92,12 @@ window.Modeles = (function () {
             <div class="modele-stat modele-stat--m2">
               <strong>${m2Count}</strong>
               <span>par m²</span>
+            </div>
+          ` : ''}
+          ${perimCount > 0 ? `
+            <div class="modele-stat modele-stat--m2">
+              <strong>${perimCount}</strong>
+              <span>périmètre</span>
             </div>
           ` : ''}
           ${fixCount > 0 ? `
@@ -146,8 +153,8 @@ window.Modeles = (function () {
     return `
       <div class="form-grid">
         <div class="form-field form-field--full">
-          <label>Nom du modèle *</label>
-          <input id="f_nom" class="form-input" value="${Helpers.esc(m.nom)}" placeholder="Ex: Pose double vitrage standard" autofocus>
+          <label>Nom de l'ouvrage *</label>
+          <input id="f_nom" class="form-input" value="${Helpers.esc(m.nom)}" placeholder="Ex: Fenêtre PVC, Double vitrage, Volet roulant..." autofocus>
         </div>
         <div class="form-field form-field--full">
           <label>Catégorie</label>
@@ -155,12 +162,19 @@ window.Modeles = (function () {
         </div>
         <div class="form-field form-field--full">
           <label>Description</label>
-          <textarea id="f_description" class="form-textarea" rows="2" placeholder="Précisions sur ce modèle...">${Helpers.esc(m.description || '')}</textarea>
+          <textarea id="f_description" class="form-textarea" rows="2" placeholder="Précisions sur cet ouvrage...">${Helpers.esc(m.description || '')}</textarea>
         </div>
 
         <div class="form-field form-field--full">
           <label>Fournitures consommées *</label>
-          <p class="hint" style="margin:0 0 var(--s-2)">Pour chaque fourniture, choisissez le mode de calcul : <strong>par m²</strong> (multiplié par la surface du chantier) ou <strong>fixe</strong> (quantité indépendante de la surface).</p>
+          <div class="modele-help">
+            <p>Pour chaque fourniture, choisissez comment la quantité est calculée :</p>
+            <ul>
+              <li><strong>× surface (m²)</strong> : la quantité saisie est multipliée par la surface de l'ouvrage. Ex : 4 m² de film par m².</li>
+              <li><strong>× périmètre (m)</strong> : multipliée par le tour de l'ouvrage (2×largeur + 2×hauteur). Ex : joint d'étanchéité.</li>
+              <li><strong>× nombre (fixe)</strong> : multipliée par le nombre d'ouvrages. Ex : 4 vis par fenêtre.</li>
+            </ul>
+          </div>
           <div id="modeleLignes" class="modele-lignes-container">
             ${(m.lignes || []).map((l, i) => renderLigne(l, i)).join('')}
           </div>
@@ -185,9 +199,10 @@ window.Modeles = (function () {
         </select>
         <input class="form-input mono ligne-qte" placeholder="Qté" type="number" min="0" step="0.01" data-field="quantite" value="${l.quantite || ''}">
         <span class="ligne-unite mono">${Helpers.esc(l.unite || '')}</span>
-        <select class="form-select ligne-mode" data-field="mode">
-          <option value="m2" ${(l.mode || 'm2') === 'm2' ? 'selected' : ''}>par m²</option>
-          <option value="fixe" ${l.mode === 'fixe' ? 'selected' : ''}>fixe / chantier</option>
+        <select class="form-select ligne-mode" data-field="mode" data-no-search>
+          <option value="m2" ${(l.mode || 'm2') === 'm2' ? 'selected' : ''}>× surface (m²)</option>
+          <option value="perimetre" ${l.mode === 'perimetre' ? 'selected' : ''}>× périmètre (m)</option>
+          <option value="fixe" ${l.mode === 'fixe' ? 'selected' : ''}>× nombre (fixe)</option>
         </select>
         <button type="button" class="btn-icon btn-icon--danger ligne-del" title="Supprimer">🗑</button>
       </div>
@@ -249,8 +264,34 @@ window.Modeles = (function () {
     const m = Store.state.modeles.find(x => x.id === id);
     if (!m) return;
 
-    const m2Lignes = (m.lignes || []).filter(l => l.mode === 'm2');
-    const fixLignes = (m.lignes || []).filter(l => l.mode === 'fixe');
+    const MODE_LABELS = {
+      m2: { label: 'par m²', icon: '📐' },
+      perimetre: { label: 'par mètre (périmètre)', icon: '📏' },
+      fixe: { label: 'par ouvrage (fixe)', icon: '📦' }
+    };
+
+    const renderModeTable = (mode) => {
+      const lignes = (m.lignes || []).filter(l => (l.mode || 'm2') === mode);
+      if (lignes.length === 0) return '';
+      const info = MODE_LABELS[mode];
+      return `
+        <div class="detail-section">
+          <h3>${info.icon} Fournitures ${info.label}</h3>
+          <table class="table">
+            <thead><tr><th>Fourniture</th><th>Quantité ${info.label}</th><th>Unité</th></tr></thead>
+            <tbody>
+              ${lignes.map(l => `
+                <tr>
+                  <td><strong>${Helpers.esc(l.designation)}</strong></td>
+                  <td class="mono">${l.quantite}</td>
+                  <td>${Helpers.esc(l.unite || '')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    };
 
     Modal.open({
       title: `📋 ${m.nom}`,
@@ -259,50 +300,27 @@ window.Modeles = (function () {
         ${m.categorie ? `<div class="rdv-detail-header"><span class="badge badge--info">${Helpers.esc(m.categorie)}</span></div>` : ''}
         ${m.description ? `<div class="detail-section"><p style="white-space:pre-wrap;margin:0">${Helpers.esc(m.description)}</p></div>` : ''}
 
-        ${m2Lignes.length > 0 ? `
-          <div class="detail-section">
-            <h3>📐 Fournitures par m²</h3>
-            <table class="table">
-              <thead><tr><th>Fourniture</th><th>Quantité / m²</th><th>Unité</th></tr></thead>
-              <tbody>
-                ${m2Lignes.map(l => `
-                  <tr>
-                    <td><strong>${Helpers.esc(l.designation)}</strong></td>
-                    <td class="mono">${l.quantite}</td>
-                    <td>${Helpers.esc(l.unite || '')}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        ` : ''}
+        ${renderModeTable('m2')}
+        ${renderModeTable('perimetre')}
+        ${renderModeTable('fixe')}
 
-        ${fixLignes.length > 0 ? `
-          <div class="detail-section">
-            <h3>📦 Fournitures fixes (par chantier)</h3>
-            <table class="table">
-              <thead><tr><th>Fourniture</th><th>Quantité</th><th>Unité</th></tr></thead>
-              <tbody>
-                ${fixLignes.map(l => `
-                  <tr>
-                    <td><strong>${Helpers.esc(l.designation)}</strong></td>
-                    <td class="mono">${l.quantite}</td>
-                    <td>${Helpers.esc(l.unite || '')}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        ` : ''}
-
-        ${m.lignes.length === 0 ? '<p class="hint">Aucune fourniture définie dans ce modèle.</p>' : ''}
+        ${(m.lignes || []).length === 0 ? '<p class="hint">Aucune fourniture définie dans cet ouvrage.</p>' : ''}
 
         <div class="detail-section">
           <h3>📊 Simulation</h3>
+          <p class="hint" style="margin:0 0 var(--s-2)">Testez le calcul pour un ouvrage de dimensions données.</p>
           <div class="form-grid">
-            <div class="form-field form-field--full">
-              <label>Surface à simuler (m²)</label>
-              <input id="simu_surface" type="number" class="form-input mono" min="0" step="0.1" value="10" placeholder="10">
+            <div class="form-field">
+              <label>Largeur (m)</label>
+              <input id="simu_largeur" type="number" class="form-input mono" min="0" step="0.01" value="1" data-no-search>
+            </div>
+            <div class="form-field">
+              <label>Hauteur (m)</label>
+              <input id="simu_hauteur" type="number" class="form-input mono" min="0" step="0.01" value="1">
+            </div>
+            <div class="form-field">
+              <label>Nombre d'ouvrages</label>
+              <input id="simu_nombre" type="number" class="form-input mono" min="1" step="1" value="1">
             </div>
           </div>
           <div id="simu_resultat" style="margin-top:var(--s-3)"></div>
@@ -316,39 +334,62 @@ window.Modeles = (function () {
       `,
       onOpen: () => {
         const simulate = () => {
-          const surface = parseFloat(document.getElementById('simu_surface')?.value) || 0;
-          const result = computeQuantities(m, surface);
+          const largeur = parseFloat(document.getElementById('simu_largeur')?.value) || 0;
+          const hauteur = parseFloat(document.getElementById('simu_hauteur')?.value) || 0;
+          const nombre = parseInt(document.getElementById('simu_nombre')?.value) || 1;
+          const surface = largeur * hauteur * nombre;
+          const perimetre = 2 * (largeur + hauteur) * nombre;
+          const result = computeQuantities(m, { surface, perimetre, nombre });
           document.getElementById('simu_resultat').innerHTML = result.length === 0 ? '<p class="hint">Aucune fourniture à simuler.</p>' : `
             <table class="table">
-              <thead><tr><th>Fourniture</th><th>Quantité totale</th><th>Unité</th><th>Mode</th></tr></thead>
+              <thead><tr><th>Fourniture</th><th>Quantité totale</th><th>Unité</th><th>Calcul</th></tr></thead>
               <tbody>
-                ${result.map(r => `
-                  <tr>
-                    <td><strong>${Helpers.esc(r.designation)}</strong></td>
-                    <td class="mono"><strong style="color:#3b82f6">${r.quantite.toFixed(2)}</strong></td>
-                    <td>${Helpers.esc(r.unite || '')}</td>
-                    <td>${r.mode === 'm2' ? `<span class="badge badge--info">${r.qtePar} / m²</span>` : '<span class="badge">fixe</span>'}</td>
-                  </tr>
-                `).join('')}
+                ${result.map(r => {
+                  const modeTxt = r.mode === 'm2' ? `${r.qtePar} × ${surface.toFixed(2)} m²`
+                    : r.mode === 'perimetre' ? `${r.qtePar} × ${perimetre.toFixed(2)} m`
+                    : `${r.qtePar} × ${nombre}`;
+                  return `
+                    <tr>
+                      <td><strong>${Helpers.esc(r.designation)}</strong></td>
+                      <td class="mono"><strong style="color:#3b82f6">${r.quantite.toFixed(2)}</strong></td>
+                      <td>${Helpers.esc(r.unite || '')}</td>
+                      <td class="hint">${modeTxt}</td>
+                    </tr>
+                  `;
+                }).join('')}
               </tbody>
             </table>
           `;
         };
-        document.getElementById('simu_surface')?.addEventListener('input', simulate);
+        ['simu_largeur', 'simu_hauteur', 'simu_nombre'].forEach(id => {
+          document.getElementById(id)?.addEventListener('input', simulate);
+        });
         simulate();
       }
     });
   }
 
-  function computeQuantities(modele, surface) {
-    return (modele.lignes || []).map(l => ({
-      fournitureId: l.fournitureId,
-      designation: l.designation,
-      unite: l.unite,
-      mode: l.mode,
-      qtePar: l.quantite,
-      quantite: l.mode === 'm2' ? l.quantite * (surface || 0) : l.quantite
-    }));
+  /**
+   * Calcule les quantités d'un modèle selon les dimensions.
+   * dims = { surface, perimetre, nombre }
+   */
+  function computeQuantities(modele, dims) {
+    const { surface = 0, perimetre = 0, nombre = 1 } = dims || {};
+    return (modele.lignes || []).map(l => {
+      const mode = l.mode || 'm2';
+      let quantite;
+      if (mode === 'm2') quantite = l.quantite * surface;
+      else if (mode === 'perimetre') quantite = l.quantite * perimetre;
+      else quantite = l.quantite * nombre; // fixe
+      return {
+        fournitureId: l.fournitureId,
+        designation: l.designation,
+        unite: l.unite,
+        mode,
+        qtePar: l.quantite,
+        quantite
+      };
+    });
   }
 
   function _edit(id) {
