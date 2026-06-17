@@ -1014,22 +1014,64 @@ const Store = {
       });
     });
 
-    // 3) Absences qui commencent
+    // 3) Absences qui commencent + périodes d'école (départ ET retour)
     (this.state.absences || []).forEach(a => {
-      const d = new Date(a.dateDebut);
-      d.setHours(0, 0, 0, 0);
-      if (d >= now && d <= horizon) {
-        const p = (this.state.personnel || []).find(x => x.id === a.personnelId);
-        if (!p) return;
-        const type = this.getTypeAbsence(a.typeId);
-        const fullName = [p.prenom, p.nom].filter(Boolean).join(' ') || p.nom;
-        const isAlternant = p.role === 'alternant';
+      const p = (this.state.personnel || []).find(x => x.id === a.personnelId);
+      if (!p) return;
+      const type = this.getTypeAbsence(a.typeId);
+      const fullName = [p.prenom, p.nom].filter(Boolean).join(' ') || p.nom;
+      const isAlternant = p.role === 'alternant';
+      const isEcole = a.typeId === 'ecole';
+
+      const dDebut = new Date(a.dateDebut);
+      dDebut.setHours(0, 0, 0, 0);
+
+      // --- Cas spécial : période d'école → notifier le départ ET le retour ---
+      if (isEcole) {
+        // Départ à l'école
+        if (dDebut >= now && dDebut <= horizon) {
+          notifs.push({
+            type: 'ecole',
+            date: a.dateDebut,
+            dateObj: dDebut,
+            isToday: isSameDay(dDebut, now),
+            isTomorrow: isSameDay(dDebut, tomorrow),
+            icon: '🎓',
+            color: type.couleur,
+            title: `${fullName} part à l'école`,
+            subtitle: `Jusqu'au ${this._formatDateFr(a.dateFin)}`,
+            action: { kind: 'absence', id: a.id }
+          });
+        }
+        // Retour en entreprise = lendemain de la date de fin
+        const dRetour = new Date(a.dateFin);
+        dRetour.setHours(0, 0, 0, 0);
+        dRetour.setDate(dRetour.getDate() + 1);
+        if (dRetour >= now && dRetour <= horizon) {
+          notifs.push({
+            type: 'ecole',
+            date: dRetour.toISOString().split('T')[0],
+            dateObj: dRetour,
+            isToday: isSameDay(dRetour, now),
+            isTomorrow: isSameDay(dRetour, tomorrow),
+            icon: '🏢',
+            color: '#10b981',
+            title: `${fullName} revient de l'école`,
+            subtitle: `Retour en entreprise`,
+            action: { kind: 'absence', id: a.id }
+          });
+        }
+        return; // on a déjà géré l'école
+      }
+
+      // --- Cas normal : absence qui commence ---
+      if (dDebut >= now && dDebut <= horizon) {
         notifs.push({
           type: isAlternant ? 'alternant' : 'absence',
           date: a.dateDebut,
-          dateObj: d,
-          isToday: isSameDay(d, now),
-          isTomorrow: isSameDay(d, tomorrow),
+          dateObj: dDebut,
+          isToday: isSameDay(dDebut, now),
+          isTomorrow: isSameDay(dDebut, tomorrow),
           icon: isAlternant ? '🎓' : type.icon,
           color: type.couleur,
           title: isAlternant
@@ -1298,6 +1340,27 @@ const Store = {
     });
   },
 
+  // ============================================================
+  // PÉRIODES À L'ÉCOLE (alternants) — stockées comme absences type 'ecole'
+  // ============================================================
+  /** Ajoute une période d'école pour un alternant */
+  addPeriodeEcole(personnelId, dateDebut, dateFin, notes = '') {
+    return this.addAbsence({
+      personnelId,
+      typeId: 'ecole',
+      dateDebut,
+      dateFin,
+      notes
+    });
+  },
+
+  /** Récupère les périodes d'école d'un alternant (triées par date) */
+  getPeriodesEcole(personnelId) {
+    return (this.state.absences || [])
+      .filter(a => a.personnelId === personnelId && a.typeId === 'ecole')
+      .sort((a, b) => new Date(a.dateDebut) - new Date(b.dateDebut));
+  },
+
   /**
    * Migration automatique :
    * - Conducteurs existants → personnel (rôle = 'conducteur')
@@ -1409,6 +1472,7 @@ const Store = {
     { id: 'maladie',   label: 'Maladie',         icon: '🏥', couleur: '#ef4444' },
     { id: 'familial',  label: 'Congé familial',  icon: '👶', couleur: '#f59e0b' },
     { id: 'formation', label: 'Formation',       icon: '📚', couleur: '#8b5cf6' },
+    { id: 'ecole',     label: 'École (alternance)', icon: '🎓', couleur: '#ec4899' },
     { id: 'rtt',       label: 'RTT',             icon: '⏰', couleur: '#06b6d4' },
     { id: 'autre',     label: 'Autre',           icon: '📅', couleur: '#64748b' }
   ],
@@ -1418,7 +1482,7 @@ const Store = {
   },
 
   getTypeAbsence(typeId) {
-    return this.getTypesAbsence().find(t => t.id === typeId) || this.TYPES_ABSENCE_DEFAUT[5];
+    return this.getTypesAbsence().find(t => t.id === typeId) || this.TYPES_ABSENCE_DEFAUT[this.TYPES_ABSENCE_DEFAUT.length - 1];
   },
 
   addTypeAbsence(data) {
