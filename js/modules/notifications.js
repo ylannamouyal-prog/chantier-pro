@@ -1,35 +1,31 @@
 // Module Notifications - cloche en haut à droite avec panneau déroulant
 window.Notifications = (function () {
 
-  let isOpen = false;
-
   function init() {
     const btn = document.getElementById('notifBtn');
     const panel = document.getElementById('notifPanel');
     if (!btn || !panel) return;
 
+    // Clic sur le bouton enveloppe : ouvre ou ferme.
+    // stopPropagation empêche ce clic d'être vu par le listener "document" ci-dessous.
     btn.addEventListener('click', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       toggle();
     });
 
-    // Un SEUL listener permanent sur tout le document.
-    // Il gère la fermeture quand on clique en dehors du panneau et du bouton.
+    // Listener permanent sur le document.
+    // Tout clic qui n'est PAS dans le panneau ferme le panneau.
     document.addEventListener('click', (e) => {
-      if (!isOpen) return;
       const panelEl = document.getElementById('notifPanel');
-      const btnEl = document.getElementById('notifBtn');
-      // Si le clic est sur le bouton, c'est le handler du bouton qui gère (toggle) → on ignore ici
-      if (btnEl && btnEl.contains(e.target)) return;
-      // Si le clic est en dehors du panneau → fermer
-      if (panelEl && !panelEl.contains(e.target)) {
-        close();
-      }
+      if (!panelEl || panelEl.hidden) return;          // déjà fermé, rien à faire
+      if (panelEl.contains(e.target)) return;          // clic à l'intérieur du panneau → on garde ouvert
+      close();                                          // clic ailleurs → fermer
     });
 
     // Fermer avec la touche Échap
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && isOpen) close();
+      if (e.key === 'Escape') close();
     });
 
     // Rafraîchir le badge au démarrage et après chaque changement du store
@@ -52,8 +48,6 @@ window.Notifications = (function () {
 
   function toggle() {
     const panel = document.getElementById('notifPanel');
-    // On se base sur la visibilité réelle du panneau, pas sur isOpen
-    // (qui peut être en cours de mise à jour via setTimeout)
     if (panel && !panel.hidden) close();
     else open();
   }
@@ -64,16 +58,12 @@ window.Notifications = (function () {
     panel.innerHTML = renderPanel();
     panel.hidden = false;
     bindPanelEvents();
-    // isOpen passe à true APRÈS ce cycle d'événement, pour que le clic
-    // d'ouverture ne soit pas capturé par le listener de fermeture du document
-    setTimeout(() => { isOpen = true; }, 0);
   }
 
   function close() {
     const panel = document.getElementById('notifPanel');
     if (!panel) return;
     panel.hidden = true;
-    isOpen = false;
   }
 
   function renderPanel() {
