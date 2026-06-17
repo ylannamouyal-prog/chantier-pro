@@ -2,6 +2,13 @@
    STYLES ADDITIONNELS — Nouveaux modules + alias compatibilité
    ================================================================= */
 
+/* Sécurité : l'attribut HTML "hidden" doit TOUJOURS cacher l'élément,
+   même si une règle CSS lui donne un display:flex/grid/block.
+   (évite les menus/panneaux qui restent affichés et bloquent les clics) */
+[hidden] {
+  display: none !important;
+}
+
 /* Alias de spacing (compatibilité) */
 :root {
   --sp-1: var(--s-1);
@@ -2389,6 +2396,11 @@ a.btn-icon:hover {
   max-height: 280px;
   animation: ssIn 0.12s ease-out;
 }
+/* IMPORTANT : l'attribut hidden doit l'emporter sur display:flex
+   (sinon le menu reste affiché et bloque les clics en dessous) */
+.ss-panel[hidden] {
+  display: none !important;
+}
 @keyframes ssIn {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
@@ -3500,6 +3512,11 @@ a.btn-icon:hover {
   gap: var(--s-2);
   padding: var(--s-4);
   color: var(--txt-muted);
+}
+/* L'attribut hidden doit l'emporter sur les display ci-dessus/dessous */
+.equipe-picker__drop-empty[hidden],
+.equipe-picker__drop-filled[hidden] {
+  display: none !important;
 }
 .equipe-picker__drop-icon {
   font-size: 28px;
