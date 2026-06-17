@@ -1356,13 +1356,24 @@ a.btn-icon:hover {
 }
 .modele-ligne-row {
   display: grid;
-  grid-template-columns: 2fr 90px 50px 130px 32px;
+  grid-template-columns: 2fr 90px 50px 155px 32px;
   gap: var(--s-2);
   align-items: center;
   padding: var(--s-2);
   background: var(--bg-sunken);
   border-radius: var(--r-md);
 }
+.modele-help {
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  border-radius: var(--r-md);
+  padding: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-2);
+  font-size: var(--fs-sm);
+}
+.modele-help p { margin: 0 0 6px; color: var(--txt-secondary); }
+.modele-help ul { margin: 0; padding-left: var(--s-4); }
+.modele-help li { color: var(--txt-secondary); margin-bottom: 3px; }
 .modele-ligne-row .form-input,
 .modele-ligne-row .form-select {
   height: 36px;
