@@ -9,30 +9,32 @@ window.Notifications = (function () {
     if (!btn || !panel) return;
 
     btn.addEventListener('click', (e) => {
-      e.stopPropagation();
       e.preventDefault();
       toggle();
+    });
+
+    // Un SEUL listener permanent sur tout le document.
+    // Il gère la fermeture quand on clique en dehors du panneau et du bouton.
+    document.addEventListener('click', (e) => {
+      if (!isOpen) return;
+      const panelEl = document.getElementById('notifPanel');
+      const btnEl = document.getElementById('notifBtn');
+      // Si le clic est sur le bouton, c'est le handler du bouton qui gère (toggle) → on ignore ici
+      if (btnEl && btnEl.contains(e.target)) return;
+      // Si le clic est en dehors du panneau → fermer
+      if (panelEl && !panelEl.contains(e.target)) {
+        close();
+      }
+    });
+
+    // Fermer avec la touche Échap
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isOpen) close();
     });
 
     // Rafraîchir le badge au démarrage et après chaque changement du store
     refreshBadge();
     Store.subscribe(() => refreshBadge());
-  }
-
-  // Handler de clic extérieur (attaché seulement quand le panneau est ouvert)
-  function handleOutsideClick(e) {
-    const btn = document.getElementById('notifBtn');
-    const panel = document.getElementById('notifPanel');
-    if (!panel || !btn) return;
-    // Si le clic est en dehors du panneau ET en dehors du bouton → fermer
-    if (!panel.contains(e.target) && !btn.contains(e.target)) {
-      close();
-    }
-  }
-
-  // Fermer avec la touche Échap
-  function handleEscape(e) {
-    if (e.key === 'Escape') close();
   }
 
   function refreshBadge() {
@@ -49,7 +51,10 @@ window.Notifications = (function () {
   }
 
   function toggle() {
-    if (isOpen) close();
+    const panel = document.getElementById('notifPanel');
+    // On se base sur la visibilité réelle du panneau, pas sur isOpen
+    // (qui peut être en cours de mise à jour via setTimeout)
+    if (panel && !panel.hidden) close();
     else open();
   }
 
@@ -58,14 +63,10 @@ window.Notifications = (function () {
     if (!panel) return;
     panel.innerHTML = renderPanel();
     panel.hidden = false;
-    isOpen = true;
     bindPanelEvents();
-    // Attacher les listeners de fermeture APRÈS ce cycle d'événement
-    // (pour éviter que le clic d'ouverture ne déclenche immédiatement la fermeture)
-    setTimeout(() => {
-      document.addEventListener('click', handleOutsideClick);
-      document.addEventListener('keydown', handleEscape);
-    }, 0);
+    // isOpen passe à true APRÈS ce cycle d'événement, pour que le clic
+    // d'ouverture ne soit pas capturé par le listener de fermeture du document
+    setTimeout(() => { isOpen = true; }, 0);
   }
 
   function close() {
@@ -73,8 +74,6 @@ window.Notifications = (function () {
     if (!panel) return;
     panel.hidden = true;
     isOpen = false;
-    document.removeEventListener('click', handleOutsideClick);
-    document.removeEventListener('keydown', handleEscape);
   }
 
   function renderPanel() {
