@@ -215,6 +215,26 @@
     // 5) Bind UI
     bindSidebar();
     bindHeader();
+    // 5bis) Déstockage automatique des chantiers démarrés
+    if (typeof Store.processDestockageAuto === 'function') {
+      try {
+        const traites = Store.processDestockageAuto();
+        if (traites.length > 0) {
+          setTimeout(() => {
+            traites.forEach(t => {
+              const nbManques = (t.manques || []).length;
+              if (nbManques > 0) {
+                Toast.warning(`📦 Stock mis à jour : chantier ${t.chantier.numero} — ${nbManques} fourniture(s) à commander`);
+              } else {
+                Toast.info(`📦 Stock mis à jour : fournitures du chantier ${t.chantier.numero} déduites`);
+              }
+            });
+          }, 800);
+        }
+      } catch (e) {
+        console.error('Erreur déstockage auto:', e);
+      }
+    }
     // 6) Route
     window.addEventListener('hashchange', () => Router.route());
     Router.route();
