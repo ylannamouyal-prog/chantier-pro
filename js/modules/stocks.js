@@ -302,6 +302,10 @@ window.Stocks = (function () {
     const alert = qte <= seuil;
     const value = qte * (f.prixUnitaire || 0);
 
+    // Réservations "à venir" (uniquement pour l'atelier)
+    const aVenir = isAtelier && Store.getReserveAVenir ? Store.getReserveAVenir(f.id) : 0;
+    const manque = aVenir > qte ? Math.ceil((aVenir - qte) * 100) / 100 : 0;
+
     return `
       <tr data-fourniture="${f.id}" class="${alert ? 'stock-row--alert' : ''}">
         <td>
@@ -312,7 +316,11 @@ window.Stocks = (function () {
         </td>
         <td>${f.categorie ? `<span class="badge badge--info">${Helpers.esc(f.categorie)}</span>` : '—'}</td>
         <td>${Helpers.esc(f.unite || 'pcs')}</td>
-        <td><strong class="mono ${alert ? 'text-danger' : ''}">${Format.num(qte)}</strong></td>
+        <td>
+          <strong class="mono ${alert ? 'text-danger' : ''}">${Format.num(qte)}</strong>
+          ${aVenir > 0 ? `<div class="stock-avenir" title="Réservé par des chantiers prévus">à venir −${Format.num(aVenir)}</div>` : ''}
+          ${manque > 0 ? `<div class="stock-manque" title="Le stock ne suffira pas pour les chantiers prévus">⚠️ commander ${Format.num(manque)}</div>` : ''}
+        </td>
         <td>
           <div class="stock-bar">
             <div class="stock-bar__fill ${alert ? 'stock-bar__fill--alert' : ''}" style="width:${pct}%"></div>
