@@ -2535,6 +2535,50 @@ a.btn-icon:hover {
   margin-top: 2px;
 }
 
+/* ========== FOURNITURES MANQUANTES (chantier) ========== */
+.manques-block {
+  background: color-mix(in srgb, #ef4444 7%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, #ef4444 25%, transparent);
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+.manques-block__head {
+  margin-bottom: var(--s-2);
+}
+.manques-block__head strong {
+  color: #dc2626;
+  font-size: var(--fs-sm);
+}
+.manques-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.manque-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border-radius: var(--r-sm);
+  flex-wrap: wrap;
+}
+.manque-row__name {
+  flex: 1;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  min-width: 120px;
+}
+.manque-row__qte {
+  color: #ef4444;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+}
+.manque-row__stock {
+  font-size: var(--fs-xs);
+}
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
