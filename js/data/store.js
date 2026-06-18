@@ -698,6 +698,134 @@ const Store = {
   },
 
   // ============================================================
+  // DÉSTOCKAGE AUTOMATIQUE (le jour du chantier)
+  // ============================================================
+  /**
+   * Parcourt les chantiers dont la date de début est arrivée/passée
+   * et qui n'ont pas encore été déstockés. Déduit leurs fournitures
+   * du stock atelier (avec gestion du manque). Retourne la liste des
+   * chantiers traités pour pouvoir afficher un message.
+   */
+  processDestockageAuto() {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const traites = [];
+
+    (this.state.chantiers || []).forEach(chantier => {
+      if (chantier.destockEffectue) return;          // déjà fait
+      if (!chantier.dateDebut) return;                // pas de date
+      const debut = new Date(chantier.dateDebut);
+      debut.setHours(0, 0, 0, 0);
+      if (debut > now) return;                        // pas encore commencé
+
+      // Le chantier a démarré : on déstocke
+      const besoins = this.getBesoinsFournitures(chantier.id);
+      if (besoins.length === 0) {
+        // Rien à déduire, mais on marque comme traité pour ne pas reboucler
+        this._markDestockEffectue(chantier.id, []);
+        return;
+      }
+
+      const manques = [];
+      this.commit('chantier:destockage', s => {
+        const ch = s.chantiers.find(x => x.id === chantier.id);
+        if (!ch) return;
+        besoins.forEach(b => {
+          const dispo = s.stockAtelier[b.fournitureId] || 0;
+          const aDeduire = Math.min(dispo, b.quantite);
+          const manque = Math.max(0, b.quantite - dispo);
+
+          if (aDeduire > 0) {
+            s.stockAtelier[b.fournitureId] = dispo - aDeduire;
+            if (!s.mouvements) s.mouvements = [];
+            s.mouvements.push({
+              id: Helpers.uid('mv_'),
+              fournitureId: b.fournitureId,
+              type: 'sortie',
+              quantite: aDeduire,
+              emplacement: 'atelier',
+              motif: `Chantier ${ch.numero}`,
+              date: new Date().toISOString()
+            });
+          }
+          if (manque > 0) {
+            manques.push({
+              fournitureId: b.fournitureId,
+              designation: b.designation,
+              unite: b.unite,
+              quantite: Math.ceil(manque * 100) / 100
+            });
+          }
+        });
+        ch.destockEffectue = true;
+        ch.destockAt = new Date().toISOString();
+        ch.fournituresManquantes = manques;
+      });
+
+      traites.push({ chantier, manques });
+    });
+
+    return traites;
+  },
+
+  _markDestockEffectue(chantierId, manques) {
+    this.commit('chantier:destockage', s => {
+      const ch = s.chantiers.find(x => x.id === chantierId);
+      if (ch) {
+        ch.destockEffectue = true;
+        ch.destockAt = new Date().toISOString();
+        ch.fournituresManquantes = manques || [];
+      }
+    });
+  },
+
+  /**
+   * Complète les fournitures manquantes d'un chantier (déduit ce qui manquait,
+   * uniquement si du stock est désormais disponible). Retourne ce qui a été complété.
+   */
+  completerFournituresManquantes(chantierId) {
+    const chantier = this.state.chantiers.find(c => c.id === chantierId);
+    if (!chantier || !chantier.fournituresManquantes) return { completes: [], restants: [] };
+
+    const completes = [];
+    const restants = [];
+
+    this.commit('chantier:completManques', s => {
+      const ch = s.chantiers.find(x => x.id === chantierId);
+      if (!ch || !ch.fournituresManquantes) return;
+
+      const nouveauxManques = [];
+      ch.fournituresManquantes.forEach(m => {
+        const dispo = s.stockAtelier[m.fournitureId] || 0;
+        const aDeduire = Math.min(dispo, m.quantite);
+        const resteManque = Math.max(0, m.quantite - dispo);
+
+        if (aDeduire > 0) {
+          s.stockAtelier[m.fournitureId] = dispo - aDeduire;
+          if (!s.mouvements) s.mouvements = [];
+          s.mouvements.push({
+            id: Helpers.uid('mv_'),
+            fournitureId: m.fournitureId,
+            type: 'sortie',
+            quantite: aDeduire,
+            emplacement: 'atelier',
+            motif: `Chantier ${ch.numero} (complément)`,
+            date: new Date().toISOString()
+          });
+          completes.push({ ...m, quantite: aDeduire });
+        }
+        if (resteManque > 0) {
+          nouveauxManques.push({ ...m, quantite: Math.ceil(resteManque * 100) / 100 });
+          restants.push({ ...m, quantite: Math.ceil(resteManque * 100) / 100 });
+        }
+      });
+      ch.fournituresManquantes = nouveauxManques;
+    });
+
+    return { completes, restants };
+  },
+
+  // ============================================================
   // ENGINS
   // ============================================================
   addEngin(data) {
@@ -1189,6 +1317,24 @@ const Store = {
           action: { kind: 'commande', id: c.id }
         });
       }
+    });
+
+    // 5) Fournitures manquantes sur des chantiers (stock insuffisant)
+    (this.state.chantiers || []).forEach(c => {
+      const manques = c.fournituresManquantes || [];
+      if (manques.length === 0) return;
+      notifs.push({
+        type: 'manque',
+        date: now.toISOString().split('T')[0],
+        dateObj: now,
+        isToday: true,
+        isTomorrow: false,
+        icon: '⚠️',
+        color: '#ef4444',
+        title: `${manques.length} fourniture(s) à commander`,
+        subtitle: `Chantier ${c.numero} — stock insuffisant`,
+        action: { kind: 'chantier', id: c.id }
+      });
     });
 
     // Tri par date croissante, puis demain/aujourd'hui en avant
