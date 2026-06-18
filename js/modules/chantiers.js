@@ -694,6 +694,9 @@ const Chantiers = {
     const bilan = Store.getBilanChantier(chantierId);
     if (!bilan) return '';
 
+    const chantier = Store.state.chantiers.find(c => c.id === chantierId);
+    const manques = (chantier && chantier.fournituresManquantes) || [];
+
     const CATS = {
       'location': { label: 'Location', icon: '🏗️' },
       'carburant': { label: 'Carburant', icon: '⛽' },
@@ -702,8 +705,37 @@ const Chantiers = {
       'autre': { label: 'Autre', icon: '📋' }
     };
 
+    // Vérifie s'il y a du stock dispo pour compléter
+    const peutCompleter = manques.some(m => (Store.state.stockAtelier[m.fournitureId] || 0) > 0);
+
+    const manquesHtml = manques.length === 0 ? '' : `
+      <div class="manques-block">
+        <div class="manques-block__head">
+          <strong>⚠️ Fournitures manquantes (stock insuffisant au démarrage)</strong>
+        </div>
+        <div class="manques-list">
+          ${manques.map(m => {
+            const dispo = Store.state.stockAtelier[m.fournitureId] || 0;
+            return `
+              <div class="manque-row">
+                <span class="manque-row__name">${Helpers.esc(m.designation)}</span>
+                <span class="manque-row__qte mono">manque ${Format.num(m.quantite)} ${Helpers.esc(m.unite || '')}</span>
+                <span class="manque-row__stock hint">${dispo > 0 ? `${Format.num(dispo)} dispo en stock` : 'stock vide'}</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <p class="hint" style="margin:var(--s-2) 0 0">Ces fournitures n'ont pas pu être déduites faute de stock. Réapprovisionnez puis cliquez ci-dessous pour les déduire.</p>
+        <button class="btn ${peutCompleter ? 'btn--primary' : 'btn--ghost'} btn--sm" id="completManquesBtn" ${peutCompleter ? '' : 'disabled'} style="margin-top:var(--s-2)">
+          ${peutCompleter ? '📦 Compléter les fournitures manquantes' : 'Aucun stock disponible pour compléter'}
+        </button>
+      </div>
+    `;
+
     return `
       <div class="detail-section__title">💰 Dépenses du chantier</div>
+
+      ${manquesHtml}
 
       <div class="bilan-cards">
         <div class="bilan-card">
@@ -757,6 +789,21 @@ const Chantiers = {
   _bindDepensesEvents(chantierId) {
     const $ = (sel) => document.querySelector(sel);
     $('#addDepenseBtn')?.addEventListener('click', () => this._openDepenseForm(chantierId));
+
+    // Bouton compléter les fournitures manquantes
+    $('#completManquesBtn')?.addEventListener('click', () => {
+      const result = Store.completerFournituresManquantes(chantierId);
+      if (result.completes.length > 0) {
+        Toast.success(`📦 ${result.completes.length} fourniture(s) déduite(s) du stock`);
+      }
+      if (result.restants.length > 0) {
+        Toast.warning(`Il reste ${result.restants.length} fourniture(s) en manque (stock encore insuffisant)`);
+      }
+      if (result.completes.length === 0 && result.restants.length > 0) {
+        Toast.warning('Aucun stock disponible pour compléter');
+      }
+      this._refreshDepenses(chantierId);
+    });
 
     document.querySelectorAll('[data-edit-depense]').forEach(btn => {
       btn.addEventListener('click', () => this._openDepenseForm(chantierId, btn.dataset.editDepense));
