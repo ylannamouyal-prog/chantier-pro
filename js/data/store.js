@@ -612,6 +612,92 @@ const Store = {
   },
 
   // ============================================================
+  // RÉSERVATIONS PRÉVISIONNELLES "À VENIR"
+  // Pour chaque chantier au statut "prévu" (dates futures, cotes faites)
+  // et NON encore déstocké, on calcule les fournitures nécessaires
+  // via les ouvrages associés aux catégories de cotes.
+  // ============================================================
+
+  /** Calcule les besoins en fournitures d'un chantier (depuis ses cotes + ouvrages) */
+  getBesoinsFournitures(chantierId) {
+    const cotes = this.getCotesByChantier
+      ? this.getCotesByChantier(chantierId)
+      : (this.state.cotes || []).filter(c => c.chantierId === chantierId);
+
+    const besoins = {}; // fournitureId → { fournitureId, designation, unite, quantite }
+
+    (cotes || []).forEach(cote => {
+      const cat = (this.state.categoriesCotes || []).find(c => c.id === cote.categorieId);
+      if (!cat || !cat.modeleId) return;
+      const modele = (this.state.modeles || []).find(m => m.id === cat.modeleId);
+      if (!modele || !modele.lignes) return;
+
+      const qte = cote.quantite || 1;
+      const largeur = (cote.largeur || 0) / 1000;
+      const hauteur = (cote.hauteur || 0) / 1000;
+      const surface = largeur * hauteur * qte;
+      const perimetre = 2 * (largeur + hauteur) * qte;
+
+      modele.lignes.forEach(ligne => {
+        if (!ligne.fournitureId) return;
+        const mode = ligne.mode || 'm2';
+        let q;
+        if (mode === 'm2') q = ligne.quantite * surface;
+        else if (mode === 'perimetre') q = ligne.quantite * perimetre;
+        else q = ligne.quantite * qte;
+
+        if (!besoins[ligne.fournitureId]) {
+          const f = this.state.fournitures.find(x => x.id === ligne.fournitureId);
+          besoins[ligne.fournitureId] = {
+            fournitureId: ligne.fournitureId,
+            designation: ligne.designation || f?.nom || 'Fourniture',
+            unite: ligne.unite || f?.unite || 'u',
+            quantite: 0
+          };
+        }
+        besoins[ligne.fournitureId].quantite += q;
+      });
+    });
+
+    // Arrondi
+    return Object.values(besoins).map(b => ({
+      ...b,
+      quantite: Math.ceil(b.quantite * 100) / 100
+    }));
+  },
+
+  /** Quantité totale "à venir" (réservée) pour une fourniture, tous chantiers prévus confondus */
+  getReserveAVenir(fournitureId) {
+    const chantiers = (this.state.chantiers || []).filter(c => {
+      if (c.destockEffectue) return false; // déjà déduit
+      const statut = Helpers.computeStatus(c);
+      return statut === 'prevu'; // uniquement les chantiers prévus (pas en-attente-cotes)
+    });
+
+    let total = 0;
+    chantiers.forEach(c => {
+      const besoins = this.getBesoinsFournitures(c.id);
+      const b = besoins.find(x => x.fournitureId === fournitureId);
+      if (b) total += b.quantite;
+    });
+    return Math.ceil(total * 100) / 100;
+  },
+
+  /** Détail des chantiers qui réservent une fourniture (pour info) */
+  getReservationsDetail(fournitureId) {
+    const result = [];
+    (this.state.chantiers || []).forEach(c => {
+      if (c.destockEffectue) return;
+      const statut = Helpers.computeStatus(c);
+      if (statut !== 'prevu') return;
+      const besoins = this.getBesoinsFournitures(c.id);
+      const b = besoins.find(x => x.fournitureId === fournitureId);
+      if (b) result.push({ chantier: c, quantite: b.quantite });
+    });
+    return result;
+  },
+
+  // ============================================================
   // ENGINS
   // ============================================================
   addEngin(data) {
