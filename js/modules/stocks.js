@@ -163,135 +163,332 @@ window.Stocks = (function () {
   // ONGLET COMMANDES CHANTIER
   // ============================================================
   function renderCommandesChantier(content) {
-    // Commandes liées à un chantier (motif chantier OU chantierId renseigné), non livrées/annulées prioritaires
-    const commandes = (Store.state.commandes || [])
-      .filter(c => c.chantierId || c.motif === 'chantier')
-      .filter(c => {
-        if (!searchQuery) return true;
-        const q = searchQuery.toLowerCase();
-        const chantier = Store.state.chantiers.find(ch => ch.id === c.chantierId);
-        const fournisseur = Store.state.fournisseurs.find(f => f.id === c.fournisseurId);
-        return (c.numero || '').toLowerCase().includes(q) ||
-               (chantier?.titre || '').toLowerCase().includes(q) ||
-               (chantier?.numero || '').toLowerCase().includes(q) ||
-               (fournisseur?.nom || '').toLowerCase().includes(q);
-      })
-      .sort((a, b) => {
-        // Non livrées d'abord, puis par date
-        const order = { 'a-passer': 0, 'passee': 1, 'livree': 2, 'annulee': 3 };
-        const oa = order[a.statut] ?? 9;
-        const ob = order[b.statut] ?? 9;
-        if (oa !== ob) return oa - ob;
-        return new Date(b.dateCommande) - new Date(a.dateCommande);
-      });
+    const STATUTS = {
+      'a-commander': { label: 'À commander', cls: 'badge--warning', icon: '📝' },
+      'commande': { label: 'Commandé', cls: 'badge--info', icon: '📦' },
+      'livre': { label: 'Livré', cls: 'badge--success', icon: '✅' },
+      'pose': { label: 'Posé', cls: 'badge--done', icon: '🔧' }
+    };
 
-    const totalValue = commandes
-      .filter(c => c.statut !== 'annulee')
-      .reduce((s, c) => s + (c.lignes || []).reduce((ls, l) => ls + (l.quantite * (l.prixUnitaire || 0)), 0), 0);
-    const enAttente = commandes.filter(c => c.statut === 'a-passer' || c.statut === 'passee').length;
+    let articles = Store.getArticlesSpecifiques();
+
+    // Filtre recherche
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      articles = articles.filter(a => {
+        const ch = Store.state.chantiers.find(c => c.id === a.chantierId);
+        return (a.designation || '').toLowerCase().includes(q) ||
+               (ch?.titre || '').toLowerCase().includes(q) ||
+               (ch?.numero || '').toLowerCase().includes(q);
+      });
+    }
+
+    // Séparer : articles de chantier (non libres) / stock atelier non assigné (libres)
+    const articlesChantier = articles.filter(a => !a.libre)
+      .sort((a, b) => {
+        const order = { 'a-commander': 0, 'commande': 1, 'livre': 2, 'pose': 3 };
+        return (order[a.statut] ?? 9) - (order[b.statut] ?? 9);
+      });
+    const articlesLibres = articles.filter(a => a.libre);
+
+    const enAttente = articlesChantier.filter(a => a.statut === 'a-commander' || a.statut === 'commande').length;
+    const enAtelier = articlesChantier.filter(a => a.statut === 'livre').length + articlesLibres.length;
+    const totalValue = articlesChantier.reduce((s, a) => s + (a.quantite * (a.prixUnitaire || 0)), 0);
 
     content.innerHTML = `
       <div class="stock-summary">
         <div class="stat-card">
-          <div class="stat-card__label">Commandes chantier</div>
-          <div class="stat-card__value">${commandes.length}</div>
+          <div class="stat-card__label">Articles spécifiques</div>
+          <div class="stat-card__value">${articlesChantier.length}</div>
         </div>
         <div class="stat-card ${enAttente > 0 ? 'stat-card--warning' : ''}">
           <div class="stat-card__label">En attente</div>
           <div class="stat-card__value">${enAttente}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-card__label">Valeur estimée HT</div>
+          <div class="stat-card__label">📦 En atelier</div>
+          <div class="stat-card__value">${enAtelier}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__label">Valeur HT</div>
           <div class="stat-card__value">${Format.euro(totalValue)}</div>
         </div>
       </div>
 
       <div class="commandes-chantier-info">
-        ℹ️ Ces commandes sont destinées à des chantiers précis et sont suivies séparément du stock atelier courant.
-        Une commande livrée injecte ses fournitures dans le stock atelier.
+        ℹ️ Suivi des articles sur-mesure (vitrage, store, porte...) commandés pour un chantier précis.
+        Cycle : 📝 À commander → 📦 Commandé → ✅ Livré → 🔧 Posé. Le surplus non posé peut être remis en stock atelier.
+        <button class="btn btn--primary btn--sm" id="addArticleBtn" style="margin-top:var(--s-2)">+ Nouvel article spécifique</button>
       </div>
 
-      ${commandes.length === 0 ? UI.emptyState({
+      ${articlesChantier.length === 0 && articlesLibres.length === 0 ? UI.emptyState({
         icon: '🏗️',
-        title: 'Aucune commande chantier',
-        message: searchQuery ? 'Aucun résultat pour cette recherche.' : 'Les commandes liées à un chantier apparaîtront ici. Créez-en depuis la page Commandes en choisissant un chantier.',
-        action: !searchQuery ? '<a class="btn btn--primary" href="#/commandes">→ Aller aux commandes</a>' : ''
+        title: 'Aucun article spécifique',
+        message: searchQuery ? 'Aucun résultat pour cette recherche.' : 'Ajoutez les articles sur-mesure de vos chantiers (vitrage, store, porte spéciale...).',
+        action: !searchQuery ? '<button class="btn btn--primary" onclick="document.getElementById(\'addArticleBtn\')?.click()">+ Nouvel article</button>' : ''
       }) : `
-        <div class="cmd-chantier-list">
-          ${commandes.map(renderCommandeChantierCard).join('')}
-        </div>
+        ${articlesChantier.length > 0 ? `
+          <div class="art-section-title">🏗️ Articles par chantier</div>
+          <div class="art-list">
+            ${articlesChantier.map(a => renderArticleCard(a, STATUTS)).join('')}
+          </div>
+        ` : ''}
+
+        ${articlesLibres.length > 0 ? `
+          <div class="art-section-title" style="margin-top:var(--s-4)">🏭 Stock atelier (non assigné)</div>
+          <p class="hint" style="margin-bottom:var(--s-2)">Articles livrés non posés, remis en stock. Réutilisables sur un autre chantier.</p>
+          <div class="art-list">
+            ${articlesLibres.map(a => renderArticleCard(a, STATUTS)).join('')}
+          </div>
+        ` : ''}
       `}
     `;
 
-    content.querySelectorAll('[data-cmd-id]').forEach(card => {
-      card.addEventListener('click', (e) => {
-        if (e.target.closest('button')) return;
-        window.Commandes?.openForm?.(card.dataset.cmdId);
-      });
-      card.querySelector('[data-cmd-livree]')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = card.dataset.cmdId;
+    document.getElementById('addArticleBtn')?.addEventListener('click', () => openArticleForm());
+    bindArticleCards(content, STATUTS);
+  }
+
+  function renderArticleCard(a, STATUTS) {
+    const chantier = Store.state.chantiers.find(c => c.id === a.chantierId);
+    const conducteur = Store.state.personnel.find(p => p.id === a.conducteurId);
+    const fournisseur = Store.state.fournisseurs.find(f => f.id === a.fournisseurId);
+    const st = STATUTS[a.statut] || { label: a.statut, cls: '', icon: '' };
+    const totalHT = a.quantite * (a.prixUnitaire || 0);
+
+    return `
+      <div class="art-card" data-art-id="${a.id}">
+        <div class="art-card__head">
+          <div>
+            <strong class="art-card__desc">${Helpers.esc(a.designation)}</strong>
+            <span class="badge ${st.cls}">${st.icon} ${st.label}</span>
+          </div>
+          <span class="art-card__qte mono">${a.quantite}${a.statut === 'pose' && a.quantitePosee != null ? ` (posé ${a.quantitePosee})` : ''}</span>
+        </div>
+        <div class="art-card__body">
+          ${chantier ? `<div>🏗️ <strong>${Helpers.esc(chantier.numero)}</strong> — ${Helpers.esc(chantier.titre)}</div>` : (a.libre ? '<div class="hint">Non assigné (stock atelier)</div>' : '')}
+          ${conducteur ? `<div class="hint">👤 ${Helpers.esc([conducteur.prenom, conducteur.nom].filter(Boolean).join(' ') || conducteur.nom)}</div>` : ''}
+          ${fournisseur ? `<div class="hint">🏢 ${Helpers.esc(fournisseur.nom)}</div>` : ''}
+          ${totalHT > 0 ? `<div class="hint">💶 ${Format.euro(totalHT)} HT</div>` : ''}
+        </div>
+        <div class="art-card__actions">
+          ${renderArticleActions(a)}
+          <button class="btn-icon" data-art-edit title="Modifier">✎</button>
+          <button class="btn-icon btn-icon--danger" data-art-delete title="Supprimer">🗑</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderArticleActions(a) {
+    if (a.libre) {
+      return `<button class="btn btn--ghost btn--sm" data-art-assign>→ Assigner à un chantier</button>`;
+    }
+    switch (a.statut) {
+      case 'a-commander':
+        return `<button class="btn btn--ghost btn--sm" data-art-next="commande">📦 Marquer commandé</button>`;
+      case 'commande':
+        return `<button class="btn btn--ghost btn--sm" data-art-next="livre">✅ Marquer livré</button>`;
+      case 'livre':
+        return `<button class="btn btn--primary btn--sm" data-art-poser>🔧 Marquer posé</button>`;
+      default:
+        return '';
+    }
+  }
+
+  function bindArticleCards(content, STATUTS) {
+    content.querySelectorAll('[data-art-id]').forEach(card => {
+      const id = card.dataset.artId;
+
+      card.querySelector('[data-art-edit]')?.addEventListener('click', () => openArticleForm(id));
+      card.querySelector('[data-art-delete]')?.addEventListener('click', () => {
         Modal.confirm({
-          title: 'Marquer comme livrée ?',
-          message: 'Les fournitures de cette commande seront ajoutées au stock atelier.',
+          title: 'Supprimer cet article ?',
+          message: 'Cette action est irréversible.',
+          danger: true,
           onConfirm: () => {
-            Store.markCommandeLivree(id);
-            Toast.success('Commande livrée — stock atelier mis à jour');
+            Store.deleteArticleSpecifique(id);
+            Toast.success('Article supprimé');
             renderContent();
           }
         });
       });
+
+      card.querySelector('[data-art-next]')?.addEventListener('click', (e) => {
+        const statut = e.currentTarget.dataset.artNext;
+        Store.setStatutArticle(id, statut);
+        Toast.success('Statut mis à jour');
+        renderContent();
+      });
+
+      card.querySelector('[data-art-poser]')?.addEventListener('click', () => openPoserForm(id));
+      card.querySelector('[data-art-assign]')?.addEventListener('click', () => openAssignForm(id));
     });
   }
 
-  function renderCommandeChantierCard(c) {
-    const chantier = Store.state.chantiers.find(ch => ch.id === c.chantierId);
-    const fournisseur = Store.state.fournisseurs.find(f => f.id === c.fournisseurId);
-    const totalHT = (c.lignes || []).reduce((s, l) => s + (l.quantite * (l.prixUnitaire || 0)), 0);
-    const statutLabels = {
-      'a-passer': { label: 'À passer', cls: 'badge--warning' },
-      'passee': { label: 'Passée', cls: 'badge--info' },
-      'livree': { label: 'Livrée', cls: 'badge--success' },
-      'annulee': { label: 'Annulée', cls: 'badge--danger' }
-    };
-    const st = statutLabels[c.statut] || { label: c.statut, cls: '' };
+  function openArticleForm(articleId = null) {
+    const existing = articleId ? Store.getArticlesSpecifiques().find(a => a.id === articleId) : null;
+    const a = existing || { designation: '', quantite: 1, chantierId: null, conducteurId: null, fournisseurId: null, prixUnitaire: 0, statut: 'a-commander' };
 
-    return `
-      <div class="cmd-chantier-card" data-cmd-id="${c.id}">
-        <div class="cmd-chantier-card__head">
-          <div>
-            <span class="cmd-chantier-card__num mono">${Helpers.esc(c.numero)}</span>
-            <span class="badge ${st.cls}">${st.label}</span>
+    const chantiers = (Store.state.chantiers || []).filter(c => Helpers.computeStatus(c) !== 'termine');
+    const conducteurs = (Store.state.personnel || []).filter(p => p.role === 'conducteur' || p.role === 'chef');
+    const fournisseurs = Store.state.fournisseurs || [];
+
+    Modal.open({
+      title: existing ? 'Modifier l\'article' : '🏗️ Nouvel article spécifique',
+      size: 'medium',
+      body: `
+        <div class="form-grid">
+          <div class="form-field form-field--full">
+            <label>Désignation *</label>
+            <input id="art_desc" class="form-input" value="${Helpers.esc(a.designation)}" placeholder="Ex: Vitrage 44.2 feuilleté 120×150, Store BSO gris 200cm..." autofocus>
           </div>
-          <strong class="cmd-chantier-card__total">${Format.euro(totalHT)} HT</strong>
+          <div class="form-field">
+            <label>Quantité *</label>
+            <input id="art_qte" class="form-input mono" type="number" min="1" step="1" value="${a.quantite}">
+          </div>
+          <div class="form-field">
+            <label>Prix unitaire (€ HT)</label>
+            <input id="art_prix" class="form-input mono" type="number" min="0" step="0.01" value="${a.prixUnitaire || 0}">
+          </div>
+          <div class="form-field form-field--full">
+            <label>Chantier *</label>
+            <select id="art_chantier" class="form-select">
+              <option value="">— Choisir —</option>
+              ${chantiers.map(c => `<option value="${c.id}" ${a.chantierId === c.id ? 'selected' : ''}>${Helpers.esc(c.numero)} — ${Helpers.esc(c.titre)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Conducteur</label>
+            <select id="art_cond" class="form-select">
+              <option value="">— Aucun —</option>
+              ${conducteurs.map(p => `<option value="${p.id}" ${a.conducteurId === p.id ? 'selected' : ''}>${Helpers.esc([p.prenom, p.nom].filter(Boolean).join(' ') || p.nom)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Fournisseur</label>
+            <select id="art_four" class="form-select">
+              <option value="">— Aucun —</option>
+              ${fournisseurs.map(f => `<option value="${f.id}" ${a.fournisseurId === f.id ? 'selected' : ''}>${Helpers.esc(f.nom)}</option>`).join('')}
+            </select>
+          </div>
         </div>
+      `,
+      footer: `
+        <button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>
+        <button class="btn btn--primary" id="artSave">${existing ? 'Mettre à jour' : 'Créer'}</button>
+      `,
+      onOpen: () => {
+        document.getElementById('artSave').addEventListener('click', () => {
+          const data = {
+            designation: document.getElementById('art_desc').value.trim(),
+            quantite: parseInt(document.getElementById('art_qte').value) || 1,
+            prixUnitaire: parseFloat(document.getElementById('art_prix').value) || 0,
+            chantierId: document.getElementById('art_chantier').value || null,
+            conducteurId: document.getElementById('art_cond').value || null,
+            fournisseurId: document.getElementById('art_four').value || null
+          };
+          if (!data.designation) { Toast.warning('La désignation est requise'); return; }
+          if (!data.chantierId) { Toast.warning('Choisissez un chantier'); return; }
+          if (existing) {
+            Store.updateArticleSpecifique(existing.id, data);
+            Toast.success('Article mis à jour');
+          } else {
+            Store.addArticleSpecifique(data);
+            Toast.success('Article créé');
+          }
+          Modal.close();
+          renderContent();
+        });
+      }
+    });
+  }
 
-        <div class="cmd-chantier-card__body">
-          ${chantier ? `
-            <div class="cmd-chantier-card__chantier">
-              🏗️ <strong>${Helpers.esc(chantier.numero)}</strong> — ${Helpers.esc(chantier.titre)}
-            </div>
-          ` : '<div class="cmd-chantier-card__chantier hint">Chantier non précisé</div>'}
-          ${fournisseur ? `<div class="hint">🏢 ${Helpers.esc(fournisseur.nom)}</div>` : ''}
-          <div class="hint">📅 Commandé le ${Format.dateShort(c.dateCommande)}${c.dateLivraisonPrevue ? ` · livraison prévue ${Format.dateShort(c.dateLivraisonPrevue)}` : ''}</div>
+  function openPoserForm(articleId) {
+    const a = Store.getArticlesSpecifiques().find(x => x.id === articleId);
+    if (!a) return;
 
-          <div class="cmd-chantier-card__lignes">
-            ${(c.lignes || []).map(l => `
-              <div class="cmd-ligne">
-                <span>${Helpers.esc(l.designation)}</span>
-                <span class="mono">${l.quantite} ${Helpers.esc(l.unite || '')}</span>
-              </div>
-            `).join('')}
+    Modal.open({
+      title: '🔧 Marquer comme posé',
+      size: 'small',
+      body: `
+        <p class="hint" style="margin-bottom:var(--s-2)">${Helpers.esc(a.designation)} — quantité commandée : <strong>${a.quantite}</strong></p>
+        <div class="form-grid">
+          <div class="form-field form-field--full">
+            <label>Quantité réellement posée *</label>
+            <input id="pose_qte" class="form-input mono" type="number" min="0" max="${a.quantite}" step="1" value="${a.quantite}" autofocus>
+            <p class="hint" style="margin-top:4px">S'il reste un surplus non posé, vous pourrez le remettre en stock atelier.</p>
           </div>
         </div>
+      `,
+      footer: `
+        <button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>
+        <button class="btn btn--primary" id="poseSave">Valider</button>
+      `,
+      onOpen: () => {
+        document.getElementById('poseSave').addEventListener('click', () => {
+          const qtePosee = parseInt(document.getElementById('pose_qte').value);
+          if (isNaN(qtePosee) || qtePosee < 0) { Toast.warning('Quantité invalide'); return; }
+          if (qtePosee > a.quantite) { Toast.warning('La quantité posée ne peut dépasser la quantité commandée'); return; }
 
-        ${(c.statut === 'a-passer' || c.statut === 'passee') ? `
-          <div class="cmd-chantier-card__actions">
-            <button class="btn btn--ghost btn--sm" data-cmd-livree>✓ Marquer livrée</button>
+          const surplus = Store.posarArticle(articleId, qtePosee);
+          Modal.close();
+
+          if (surplus > 0) {
+            Modal.confirm({
+              title: `Surplus de ${surplus} article(s)`,
+              message: `Vous avez posé ${qtePosee} sur ${a.quantite}. Voulez-vous remettre le surplus (${surplus}) en stock atelier non assigné ?`,
+              confirmLabel: 'Remettre en stock',
+              onConfirm: () => {
+                Store.remettreEnStockArticle(articleId, surplus);
+                Toast.success(`${surplus} article(s) remis en stock atelier`);
+                renderContent();
+              },
+              onCancel: () => { renderContent(); }
+            });
+          } else {
+            Toast.success('Article posé');
+            renderContent();
+          }
+        });
+      }
+    });
+  }
+
+  function openAssignForm(articleId) {
+    const a = Store.getArticlesSpecifiques().find(x => x.id === articleId);
+    if (!a) return;
+    const chantiers = (Store.state.chantiers || []).filter(c => Helpers.computeStatus(c) !== 'termine');
+
+    Modal.open({
+      title: '→ Assigner à un chantier',
+      size: 'small',
+      body: `
+        <p class="hint" style="margin-bottom:var(--s-2)">${Helpers.esc(a.designation)} (${a.quantite})</p>
+        <div class="form-grid">
+          <div class="form-field form-field--full">
+            <label>Chantier *</label>
+            <select id="assign_chantier" class="form-select">
+              <option value="">— Choisir —</option>
+              ${chantiers.map(c => `<option value="${c.id}">${Helpers.esc(c.numero)} — ${Helpers.esc(c.titre)}</option>`).join('')}
+            </select>
           </div>
-        ` : ''}
-      </div>
-    `;
+        </div>
+      `,
+      footer: `
+        <button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>
+        <button class="btn btn--primary" id="assignSave">Assigner</button>
+      `,
+      onOpen: () => {
+        document.getElementById('assignSave').addEventListener('click', () => {
+          const chantierId = document.getElementById('assign_chantier').value;
+          if (!chantierId) { Toast.warning('Choisissez un chantier'); return; }
+          Store.updateArticleSpecifique(articleId, { chantierId, libre: false, statut: 'livre' });
+          Toast.success('Article assigné au chantier');
+          Modal.close();
+          renderContent();
+        });
+      }
+    });
   }
 
   function renderStockRow(f, isAtelier, equipe) {
