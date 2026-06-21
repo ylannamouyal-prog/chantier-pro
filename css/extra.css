@@ -2593,6 +2593,68 @@ a.btn-icon:hover {
   font-size: var(--fs-sm);
 }
 
+/* ========== ARTICLES SPÉCIFIQUES (commandes chantier) ========== */
+.art-section-title {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  margin-bottom: var(--s-3);
+}
+.art-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--s-3);
+}
+.art-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  border-left: 4px solid #8b5cf6;
+}
+.art-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--s-2);
+}
+.art-card__head > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.art-card__desc {
+  font-size: var(--fs-sm);
+  font-family: 'Bricolage Grotesque', sans-serif;
+}
+.art-card__qte {
+  font-weight: 700;
+  color: #8b5cf6;
+  white-space: nowrap;
+}
+.art-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-sm);
+}
+.art-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--border-subtle);
+}
+.art-card__actions > .btn,
+.art-card__actions > .btn--ghost {
+  flex: 1;
+  min-width: 120px;
+}
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
