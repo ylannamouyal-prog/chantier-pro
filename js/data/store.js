@@ -21,6 +21,7 @@ const Store = {
     fournisseurs: [],
     categoriesFournisseurs: [], // liste gérable de catégories fournisseurs
     commandes:    [],       // bons de commande fournisseurs
+    articlesSpecifiques: [], // articles sur-mesure par chantier (vitrage, store...) avec cycle de vie
     rdvs:         [],       // rendez-vous (visites, métrés, etc.)
     modeles:      [],       // modèles de chantier (bibliothèque de fournitures par type)
     equipes:      [],       // équipes avec couleur
@@ -317,8 +318,15 @@ const Store = {
     // 2) Commandes réelles passées pour ce chantier
     const commandes = (this.state.commandes || [])
       .filter(c => c.chantierId === chantierId && c.statut !== 'annulee');
-    const totalCommandes = commandes.reduce((s, c) =>
+    let totalCommandes = commandes.reduce((s, c) =>
       s + (c.lignes || []).reduce((ls, l) => ls + (l.quantite * (l.prixUnitaire || 0)), 0), 0);
+
+    // 2bis) Articles spécifiques (sur-mesure) commandés pour ce chantier
+    const articlesSpec = (this.state.articlesSpecifiques || [])
+      .filter(a => a.chantierId === chantierId && !a.libre);
+    const totalArticlesSpec = articlesSpec.reduce((s, a) =>
+      s + ((a.quantite || 0) * (a.prixUnitaire || 0)), 0);
+    totalCommandes += totalArticlesSpec;
 
     // 3) Dépenses manuelles
     const manuelles = chantier.depensesManuelles || [];
@@ -346,6 +354,101 @@ const Store = {
   // ============================================================
   // CLIENTS
   // ============================================================
+  // ============================================================
+  // ARTICLES SPÉCIFIQUES (sur-mesure par chantier)
+  // Cycle de vie : a-commander → commande → livre → pose
+  // Un surplus (commandé mais non posé) peut être remis en stock atelier non assigné.
+  // ============================================================
+  addArticleSpecifique(data) {
+    const article = {
+      id: Helpers.uid('art_'),
+      designation: '',
+      quantite: 1,
+      quantitePosee: 0,
+      chantierId: null,
+      conducteurId: null,
+      fournisseurId: null,
+      prixUnitaire: 0,
+      statut: 'a-commander',  // a-commander | commande | livre | pose
+      libre: false,           // true = remis en stock atelier non assigné
+      createdAt: new Date().toISOString(),
+      ...data
+    };
+    this.commit('article:add', s => {
+      if (!s.articlesSpecifiques) s.articlesSpecifiques = [];
+      s.articlesSpecifiques.push(article);
+    });
+    return article;
+  },
+
+  updateArticleSpecifique(id, patch) {
+    this.commit('article:update', s => {
+      const a = s.articlesSpecifiques.find(x => x.id === id);
+      if (a) Object.assign(a, patch);
+    });
+  },
+
+  deleteArticleSpecifique(id) {
+    this.commit('article:delete', s => {
+      s.articlesSpecifiques = (s.articlesSpecifiques || []).filter(a => a.id !== id);
+    });
+  },
+
+  setStatutArticle(id, statut) {
+    this.commit('article:statut', s => {
+      const a = s.articlesSpecifiques.find(x => x.id === id);
+      if (a) {
+        a.statut = statut;
+        if (statut === 'livre') a.livreAt = new Date().toISOString();
+        if (statut === 'pose') a.poseAt = new Date().toISOString();
+      }
+    });
+  },
+
+  /**
+   * Marque un article comme posé avec une quantité réellement posée.
+   * Si surplus (commandé > posé), retourne le surplus pour proposer la remise en stock.
+   */
+  posarArticle(id, quantitePosee) {
+    let surplus = 0;
+    this.commit('article:pose', s => {
+      const a = s.articlesSpecifiques.find(x => x.id === id);
+      if (!a) return;
+      a.quantitePosee = quantitePosee;
+      a.statut = 'pose';
+      a.poseAt = new Date().toISOString();
+      surplus = Math.max(0, a.quantite - quantitePosee);
+    });
+    return surplus;
+  },
+
+  /** Remet le surplus d'un article en stock atelier non assigné (article libre) */
+  remettreEnStockArticle(id, quantiteSurplus) {
+    this.commit('article:remiseStock', s => {
+      const a = s.articlesSpecifiques.find(x => x.id === id);
+      if (!a) return;
+      // Crée un nouvel article "libre" pour le surplus
+      s.articlesSpecifiques.push({
+        id: Helpers.uid('art_'),
+        designation: a.designation,
+        quantite: quantiteSurplus,
+        quantitePosee: 0,
+        chantierId: null,
+        conducteurId: null,
+        fournisseurId: a.fournisseurId,
+        prixUnitaire: a.prixUnitaire,
+        statut: 'livre',
+        libre: true,
+        createdAt: new Date().toISOString(),
+        sourceId: a.id
+      });
+    });
+  },
+
+  getArticlesSpecifiques() {
+    return this.state.articlesSpecifiques || [];
+  },
+
   addClient(data) {
     const client = {
       id: Helpers.uid('cl_'),
@@ -846,6 +949,15 @@ const Store = {
         ch.destockEffectue = true;
         ch.destockAt = new Date().toISOString();
         ch.fournituresManquantes = manques;
+
+        // Articles spécifiques livrés de ce chantier → passent automatiquement à "posé"
+        (s.articlesSpecifiques || []).forEach(art => {
+          if (art.chantierId === ch.id && !art.libre && art.statut === 'livre') {
+            art.statut = 'pose';
+            art.quantitePosee = art.quantite;
+            art.poseAt = new Date().toISOString();
+          }
+        });
       });
 
       traites.push({ chantier, manques });
