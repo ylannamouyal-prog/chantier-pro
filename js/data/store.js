@@ -211,6 +211,92 @@ const Store = {
   },
 
   /**
+   * Ajoute une fourniture consommée manuellement à un chantier et la déduit du stock.
+   * source = 'atelier' ou un id d'équipe (camion).
+   * Déduit ce qui est disponible et enregistre le manque éventuel.
+   * Retourne { deduit, manque }.
+   */
+  addFournitureConsommee(chantierId, fournitureId, quantite, source = 'atelier') {
+    const fourniture = this.state.fournitures.find(f => f.id === fournitureId);
+    if (!fourniture) return { deduit: 0, manque: quantite };
+
+    const qteDemandee = Number(quantite) || 0;
+    if (qteDemandee <= 0) return { deduit: 0, manque: 0 };
+
+    let deduit = 0;
+    let manque = 0;
+
+    this.commit('chantier:addFourniture', s => {
+      const c = s.chantiers.find(x => x.id === chantierId);
+      if (!c) return;
+
+      // Stock disponible selon la source
+      let dispo;
+      if (source === 'atelier') {
+        dispo = s.stockAtelier[fournitureId] || 0;
+      } else {
+        if (!s.stockCamions[source]) s.stockCamions[source] = {};
+        dispo = s.stockCamions[source][fournitureId] || 0;
+      }
+
+      deduit = Math.min(dispo, qteDemandee);
+      manque = Math.max(0, qteDemandee - dispo);
+
+      // Déduction
+      if (deduit > 0) {
+        if (source === 'atelier') {
+          s.stockAtelier[fournitureId] = dispo - deduit;
+        } else {
+          s.stockCamions[source][fournitureId] = dispo - deduit;
+        }
+        // Trace mouvement
+        if (!s.mouvements) s.mouvements = [];
+        s.mouvements.push({
+          id: Helpers.uid('mv_'),
+          fournitureId,
+          type: 'sortie',
+          quantite: deduit,
+          emplacement: source,
+          motif: `Chantier ${c.numero} (ajout manuel)`,
+          date: new Date().toISOString()
+        });
+      }
+
+      // Enregistre comme dépense (au prix du stock, sur la quantité demandée)
+      if (!c.depensesManuelles) c.depensesManuelles = [];
+      const sourceLabel = source === 'atelier' ? 'Atelier'
+        : (s.equipes.find(e => e.id === source)?.nom || 'Camion');
+      c.depensesManuelles.push({
+        id: Helpers.uid('dep_'),
+        libelle: `${fourniture.nom} (${qteDemandee} ${fourniture.unite || 'u'}) — ${sourceLabel}`,
+        montant: qteDemandee * (fourniture.prixUnitaire || 0),
+        categorie: 'fourniture',
+        date: new Date().toISOString().split('T')[0],
+        fournitureId,
+        quantite: qteDemandee
+      });
+
+      // Enregistre le manque éventuel sur le chantier
+      if (manque > 0) {
+        if (!c.fournituresManquantes) c.fournituresManquantes = [];
+        const existant = c.fournituresManquantes.find(m => m.fournitureId === fournitureId);
+        if (existant) {
+          existant.quantite = Math.ceil((existant.quantite + manque) * 100) / 100;
+        } else {
+          c.fournituresManquantes.push({
+            fournitureId,
+            designation: fourniture.nom,
+            unite: fourniture.unite || 'u',
+            quantite: Math.ceil(manque * 100) / 100
+          });
+        }
+      }
+    });
+
+    return { deduit, manque };
+  },
+
+  /**
    * Calcule le bilan complet des dépenses d'un chantier.
    * Retourne { fournitures: [...], commandes: [...], manuelles: [...],
    *            totalFournitures, totalCommandes, totalManuelles, totalGeneral }
