@@ -2579,6 +2579,20 @@ a.btn-icon:hover {
   font-size: var(--fs-xs);
 }
 
+/* ========== AJOUT FOURNITURE CONSOMMÉE ========== */
+.depenses-manuelles__actions {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.fc-info {
+  background: var(--bg-sunken);
+  border-radius: var(--r-sm);
+  padding: var(--s-2);
+  min-height: 20px;
+  font-size: var(--fs-sm);
+}
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
