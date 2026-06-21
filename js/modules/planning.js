@@ -108,11 +108,6 @@ const Planning = {
               <span class="filter-row__icon">🌴</span>
               <span class="filter-row__label">Absences</span>
             </label>
-            <label class="filter-row">
-              <input type="checkbox" data-filter-type="alternants" ${this._filters.alternants ? 'checked' : ''}>
-              <span class="filter-row__icon">🎓</span>
-              <span class="filter-row__label">Présence alternants</span>
-            </label>
           </div>
 
           ${equipes.length > 0 ? `
@@ -490,26 +485,6 @@ const Planning = {
           editable: false,
           classNames: ['planning-absence', `planning-absence--${a.typeId}`]
         });
-      });
-    }
-
-    // 6) ALTERNANTS (présence) — bandes vertes simples par jour
-    if (this._filters.alternants) {
-      const alternants = (Store.state.personnel || []).filter(p => p.role === 'alternant' && p.actif !== false);
-      // Pour le mois affiché, marquer chaque jour de présence configuré (pour V1, on prend les absences inverses)
-      // V1 simple : on affiche juste un indicateur "présent" pour chaque alternant chaque jour où il n'est pas en absence
-      // Pour ne pas surcharger, on n'affiche que sur les 60 prochains jours
-      const today = new Date();
-      const horizon = new Date();
-      horizon.setDate(horizon.getDate() + 60);
-
-      alternants.forEach(alt => {
-        const absences = (Store.state.absences || []).filter(a => a.personnelId === alt.id);
-        const fullName = [alt.prenom, alt.nom].filter(Boolean).join(' ') || alt.nom;
-        // On ne crée pas une bande par jour (lourd), on signale plutôt les absences existantes
-        // L'indicateur "présent" sera implicite : pas d'absence = présent
-        // Donc en V1 on n'ajoute rien ici, mais on affiche une note dans la sidebar
-        // [Le filtre alternants est un complément informatif pour le moment]
       });
     }
 
