@@ -761,10 +761,26 @@ const Store = {
     });
 
     let total = 0;
+    // Copie de travail des stocks camions pour simuler la déduction camion d'abord
+    const camionSim = {};
     chantiers.forEach(c => {
       const besoins = this.getBesoinsFournitures(c.id);
       const b = besoins.find(x => x.fournitureId === fournitureId);
-      if (b) total += b.quantite;
+      if (!b) return;
+
+      let restant = b.quantite;
+      // Le camion de l'équipe assignée absorbe d'abord
+      const eqId = c.equipeId;
+      if (eqId && this.state.stockCamions[eqId]) {
+        if (camionSim[eqId] === undefined) {
+          camionSim[eqId] = this.state.stockCamions[eqId][fournitureId] || 0;
+        }
+        const prendreCamion = Math.min(camionSim[eqId], restant);
+        camionSim[eqId] -= prendreCamion;
+        restant -= prendreCamion;
+      }
+      // Le reste touchera l'atelier
+      total += restant;
     });
     return Math.ceil(total * 100) / 100;
   },
@@ -817,29 +833,13 @@ const Store = {
         const ch = s.chantiers.find(x => x.id === chantier.id);
         if (!ch) return;
         besoins.forEach(b => {
-          const dispo = s.stockAtelier[b.fournitureId] || 0;
-          const aDeduire = Math.min(dispo, b.quantite);
-          const manque = Math.max(0, b.quantite - dispo);
-
-          if (aDeduire > 0) {
-            s.stockAtelier[b.fournitureId] = dispo - aDeduire;
-            if (!s.mouvements) s.mouvements = [];
-            s.mouvements.push({
-              id: Helpers.uid('mv_'),
-              fournitureId: b.fournitureId,
-              type: 'sortie',
-              quantite: aDeduire,
-              emplacement: 'atelier',
-              motif: `Chantier ${ch.numero}`,
-              date: new Date().toISOString()
-            });
-          }
-          if (manque > 0) {
+          const res = this._deduireStockCamionPuisAtelier(s, ch, b.fournitureId, b.quantite, '');
+          if (res.manque > 0) {
             manques.push({
               fournitureId: b.fournitureId,
               designation: b.designation,
               unite: b.unite,
-              quantite: Math.ceil(manque * 100) / 100
+              quantite: Math.ceil(res.manque * 100) / 100
             });
           }
         });
@@ -852,6 +852,59 @@ const Store = {
     });
 
     return traites;
+  },
+
+  /**
+   * Déduit une quantité d'une fourniture en piochant D'ABORD dans le camion
+   * de l'équipe assignée au chantier, PUIS dans l'atelier pour le reste.
+   * Doit être appelé à l'intérieur d'un commit (reçoit le state mutable s).
+   * Retourne { deduit, manque }.
+   */
+  _deduireStockCamionPuisAtelier(s, chantier, fournitureId, quantite, suffixeMotif) {
+    let restant = quantite;
+    let deduitTotal = 0;
+    const suffix = suffixeMotif ? ` ${suffixeMotif}` : '';
+
+    const trace = (type, qte, emplacement, motif) => {
+      if (!s.mouvements) s.mouvements = [];
+      s.mouvements.push({
+        id: Helpers.uid('mv_'),
+        fournitureId,
+        type: 'sortie',
+        quantite: qte,
+        emplacement,
+        motif,
+        date: new Date().toISOString()
+      });
+    };
+
+    // 1) Camion de l'équipe assignée (si elle a un stock)
+    const equipeId = chantier.equipeId;
+    if (equipeId && s.stockCamions[equipeId]) {
+      const dispoCamion = s.stockCamions[equipeId][fournitureId] || 0;
+      const prendreCamion = Math.min(dispoCamion, restant);
+      if (prendreCamion > 0) {
+        s.stockCamions[equipeId][fournitureId] = dispoCamion - prendreCamion;
+        const equipeNom = s.equipes.find(e => e.id === equipeId)?.nom || 'Camion';
+        trace('sortie', prendreCamion, equipeId, `Chantier ${chantier.numero} (camion ${equipeNom})${suffix}`);
+        restant -= prendreCamion;
+        deduitTotal += prendreCamion;
+      }
+    }
+
+    // 2) Atelier pour le reste
+    if (restant > 0) {
+      const dispoAtelier = s.stockAtelier[fournitureId] || 0;
+      const prendreAtelier = Math.min(dispoAtelier, restant);
+      if (prendreAtelier > 0) {
+        s.stockAtelier[fournitureId] = dispoAtelier - prendreAtelier;
+        trace('sortie', prendreAtelier, 'atelier', `Chantier ${chantier.numero} (atelier)${suffix}`);
+        restant -= prendreAtelier;
+        deduitTotal += prendreAtelier;
+      }
+    }
+
+    return { deduit: deduitTotal, manque: Math.max(0, Math.ceil(restant * 100) / 100) };
   },
 
   _markDestockEffectue(chantierId, manques) {
@@ -882,27 +935,13 @@ const Store = {
 
       const nouveauxManques = [];
       ch.fournituresManquantes.forEach(m => {
-        const dispo = s.stockAtelier[m.fournitureId] || 0;
-        const aDeduire = Math.min(dispo, m.quantite);
-        const resteManque = Math.max(0, m.quantite - dispo);
-
-        if (aDeduire > 0) {
-          s.stockAtelier[m.fournitureId] = dispo - aDeduire;
-          if (!s.mouvements) s.mouvements = [];
-          s.mouvements.push({
-            id: Helpers.uid('mv_'),
-            fournitureId: m.fournitureId,
-            type: 'sortie',
-            quantite: aDeduire,
-            emplacement: 'atelier',
-            motif: `Chantier ${ch.numero} (complément)`,
-            date: new Date().toISOString()
-          });
-          completes.push({ ...m, quantite: aDeduire });
+        const res = this._deduireStockCamionPuisAtelier(s, ch, m.fournitureId, m.quantite, '(complément)');
+        if (res.deduit > 0) {
+          completes.push({ ...m, quantite: res.deduit });
         }
-        if (resteManque > 0) {
-          nouveauxManques.push({ ...m, quantite: Math.ceil(resteManque * 100) / 100 });
-          restants.push({ ...m, quantite: Math.ceil(resteManque * 100) / 100 });
+        if (res.manque > 0) {
+          nouveauxManques.push({ ...m, quantite: Math.ceil(res.manque * 100) / 100 });
+          restants.push({ ...m, quantite: Math.ceil(res.manque * 100) / 100 });
         }
       });
       ch.fournituresManquantes = nouveauxManques;
