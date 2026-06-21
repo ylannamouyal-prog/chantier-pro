@@ -702,6 +702,7 @@ const Chantiers = {
       'carburant': { label: 'Carburant', icon: '⛽' },
       'main-oeuvre': { label: "Main d'œuvre", icon: '👷' },
       'sous-traitance': { label: 'Sous-traitance', icon: '🤝' },
+      'fourniture': { label: 'Fourniture', icon: '📦' },
       'autre': { label: 'Autre', icon: '📋' }
     };
 
@@ -759,7 +760,10 @@ const Chantiers = {
       <div class="depenses-manuelles">
         <div class="depenses-manuelles__head">
           <strong>Dépenses manuelles</strong>
-          <button class="btn btn--ghost btn--sm" id="addDepenseBtn">+ Ajouter une dépense</button>
+          <div class="depenses-manuelles__actions">
+            <button class="btn btn--ghost btn--sm" id="addFournitureBtn">📦 Ajouter une fourniture</button>
+            <button class="btn btn--ghost btn--sm" id="addDepenseBtn">+ Ajouter une dépense</button>
+          </div>
         </div>
         ${bilan.manuelles.length === 0 ? `
           <p class="hint">Aucune dépense manuelle. Ajoutez vos frais : location, carburant, main d'œuvre, sous-traitance...</p>
@@ -789,6 +793,7 @@ const Chantiers = {
   _bindDepensesEvents(chantierId) {
     const $ = (sel) => document.querySelector(sel);
     $('#addDepenseBtn')?.addEventListener('click', () => this._openDepenseForm(chantierId));
+    $('#addFournitureBtn')?.addEventListener('click', () => this._openFournitureForm(chantierId));
 
     // Bouton compléter les fournitures manquantes
     $('#completManquesBtn')?.addEventListener('click', () => {
@@ -831,6 +836,98 @@ const Chantiers = {
       section.innerHTML = this._renderBilanDepenses(chantierId);
       this._bindDepensesEvents(chantierId);
     }
+  },
+
+  _openFournitureForm(chantierId) {
+    const fournitures = Store.state.fournitures || [];
+    const equipes = Store.state.equipes || [];
+
+    if (fournitures.length === 0) {
+      Toast.warning('Aucune fourniture dans le stock. Ajoutez-en d\'abord dans la page Stock.');
+      return;
+    }
+
+    Modal.open({
+      title: '📦 Ajouter une fourniture consommée',
+      size: 'small',
+      body: `
+        <div class="form-grid">
+          <div class="form-field form-field--full">
+            <label>Fourniture *</label>
+            <select id="fc_fourniture" class="form-select">
+              <option value="">— Choisir —</option>
+              ${fournitures.map(f => {
+                const dispo = Store.getStockTotal(f.id).atelier;
+                return `<option value="${f.id}" data-prix="${f.prixUnitaire || 0}" data-unite="${Helpers.esc(f.unite || 'u')}">${Helpers.esc(f.nom)} — ${dispo} ${Helpers.esc(f.unite || 'u')} en atelier</option>`;
+              }).join('')}
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Quantité *</label>
+            <input id="fc_quantite" class="form-input mono" type="number" min="0" step="0.01" placeholder="0">
+          </div>
+          <div class="form-field">
+            <label>Source du stock</label>
+            <select id="fc_source" class="form-select" data-no-search>
+              <option value="atelier">🏭 Atelier</option>
+              ${equipes.map(e => `<option value="${e.id}">🚚 ${Helpers.esc(e.nom)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-field form-field--full">
+            <div id="fc_info" class="fc-info hint"></div>
+          </div>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>
+        <button class="btn btn--primary" id="fcSave">Ajouter et déduire du stock</button>
+      `,
+      onOpen: () => {
+        const selF = document.getElementById('fc_fourniture');
+        const inQte = document.getElementById('fc_quantite');
+        const selSrc = document.getElementById('fc_source');
+        const info = document.getElementById('fc_info');
+
+        const updateInfo = () => {
+          const fId = selF.value;
+          if (!fId) { info.textContent = ''; return; }
+          const f = Store.state.fournitures.find(x => x.id === fId);
+          const src = selSrc.value;
+          let dispo;
+          if (src === 'atelier') dispo = Store.getStockTotal(fId).atelier;
+          else dispo = (Store.state.stockCamions[src]?.[fId]) || 0;
+          const qte = parseFloat(inQte.value) || 0;
+          const prix = f.prixUnitaire || 0;
+          let txt = `Stock disponible : ${dispo} ${f.unite || 'u'} · Prix : ${Format.euro(prix)}/${f.unite || 'u'}`;
+          if (qte > 0) {
+            txt += ` · Coût : ${Format.euro(qte * prix)}`;
+            if (qte > dispo) txt += ` · ⚠️ Manque ${Math.ceil((qte - dispo) * 100) / 100} (sera à commander)`;
+          }
+          info.textContent = txt;
+        };
+        selF.addEventListener('change', updateInfo);
+        inQte.addEventListener('input', updateInfo);
+        selSrc.addEventListener('change', updateInfo);
+
+        document.getElementById('fcSave').addEventListener('click', () => {
+          const fId = selF.value;
+          const qte = parseFloat(inQte.value) || 0;
+          const src = selSrc.value;
+          if (!fId) { Toast.warning('Choisissez une fourniture'); return; }
+          if (qte <= 0) { Toast.warning('La quantité doit être supérieure à 0'); return; }
+
+          const result = Store.addFournitureConsommee(chantierId, fId, qte, src);
+          if (result.deduit > 0) {
+            Toast.success(`${result.deduit} déduit(s) du stock`);
+          }
+          if (result.manque > 0) {
+            Toast.warning(`⚠️ Manque ${result.manque} — ajouté aux fournitures à commander`);
+          }
+          Modal.close();
+          this._refreshDepenses(chantierId);
+        });
+      }
+    });
   },
 
   _openDepenseForm(chantierId, depenseId = null) {
