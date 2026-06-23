@@ -722,7 +722,89 @@ window.PdfExport = (function () {
     Toast.success('État du stock PDF généré');
   }
 
-  return { chantier, planning, mouvements, stockEtat, computeFournituresChantier, reservationsEngins };
+  // ============================================================
+  // EXPORT PDF — LISTE DES CLIENTS
+  // ============================================================
+  function clients() {
+    const JsPDF = getJsPDF();
+    if (!JsPDF) { Toast.error('Librairie PDF non chargée'); return; }
+
+    const liste = (Store.state.clients || []).slice().sort((a, b) =>
+      (a.nom || '').localeCompare(b.nom || ''));
+    const entreprise = Store.state.parametres?.entreprise || {};
+
+    const doc = new JsPDF({ unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+
+    // Header entreprise
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageWidth, 35, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(entreprise.nom || 'ChantierPro', margin, 15);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    if (entreprise.adresse) doc.text(entreprise.adresse, margin, 22);
+    const contactLine = [entreprise.telephone, entreprise.email].filter(Boolean).join(' • ');
+    if (contactLine) doc.text(contactLine, margin, 28);
+
+    doc.setFontSize(10);
+    doc.text(`Émis le ${Format.date(new Date())}`, pageWidth - margin, 15, { align: 'right' });
+    doc.text(`${liste.length} client${liste.length > 1 ? 's' : ''}`, pageWidth - margin, 22, { align: 'right' });
+
+    let y = 45;
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('LISTE DES CLIENTS', margin, y);
+    y += 8;
+
+    // Tableau des clients
+    if (doc.autoTable) {
+      const rows = liste.map(c => {
+        const nbChantiers = (Store.state.chantiers || []).filter(ch => ch.clientId === c.id).length;
+        const adresse = [c.adresse, c.codePostal, c.ville].filter(Boolean).join(', ');
+        return [
+          c.nom || '—',
+          c.entreprise || '',
+          c.telephone ? Format.phone(c.telephone) : '',
+          c.email || '',
+          adresse,
+          String(nbChantiers)
+        ];
+      });
+
+      doc.autoTable({
+        startY: y,
+        head: [['Nom', 'Entreprise', 'Téléphone', 'Email', 'Adresse', 'Chantiers']],
+        body: rows,
+        theme: 'striped',
+        headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: {
+          5: { halign: 'center' }
+        },
+        margin: { left: margin, right: margin }
+      });
+    }
+
+    // Pied de page
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`${entreprise.nom || 'ChantierPro'} • Page ${i}/${pageCount}`,
+        pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
+    }
+
+    doc.save(`Clients_${Format.date(new Date()).replace(/\//g, '-')}.pdf`);
+    Toast.success('Liste des clients exportée en PDF');
+  }
+
+  return { chantier, planning, mouvements, stockEtat, computeFournituresChantier, reservationsEngins, clients };
 
   function reservationsEngins(filter = null) {
     const JsPDF = getJsPDF();
