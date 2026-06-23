@@ -309,6 +309,9 @@ window.Clients = (function () {
                   <strong>${Helpers.esc(client.nom || '—')}</strong>
                   ${client.role ? `<span class="badge badge--info">${Helpers.esc(client.role)}</span>` : ''}
                 </div>
+                <div class="contact-block__actions">
+                  <button class="btn-icon" data-edit-client="${client.id}" title="Modifier ce contact">✎</button>
+                </div>
               </div>
               <dl class="detail-list">
                 ${client.entreprise ? `<dt>Entreprise</dt><dd>${Helpers.esc(client.entreprise)}</dd>` : ''}
@@ -402,6 +405,16 @@ window.Clients = (function () {
           });
         });
 
+        // Boutons "Modifier ce contact" → ouvre le formulaire d'édition du client
+        document.querySelectorAll('[data-edit-client]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const cid = btn.dataset.editClient;
+            Modal.close();
+            setTimeout(() => openEdit(cid), 100);
+          });
+        });
+
         // Bouton "Définir comme principal"
         document.querySelectorAll('[data-promote-contact]').forEach(btn => {
           btn.addEventListener('click', (e) => {
@@ -452,6 +465,7 @@ window.Clients = (function () {
             ${ct.afficherPdf ? `<span class="badge" title="Sera inclus dans le PDF des chantiers">📄 PDF</span>` : ''}
           </div>
           <div class="contact-block__actions">
+            <button class="btn-icon" data-edit-client="${clientId}" title="Modifier ce contact">✎</button>
             <button class="btn-icon" data-promote-contact="${ct.id}" title="Définir comme contact principal">⭐</button>
             <button class="btn-icon btn-icon--danger" data-delete-contact="${ct.id}" title="Supprimer">🗑</button>
           </div>
