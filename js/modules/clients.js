@@ -12,6 +12,7 @@ window.Clients = (function () {
           <p class="view-subtitle">${Store.state.clients.length} client${Store.state.clients.length > 1 ? 's' : ''} enregistré${Store.state.clients.length > 1 ? 's' : ''}</p>
         </div>
         <div class="view-header__actions">
+          <button class="btn btn--ghost" id="cliPdf">📄 PDF</button>
           <button class="btn btn--ghost" id="cliExcel">📊 Excel</button>
           <button class="btn btn--primary" id="cliAdd">+ Nouveau client</button>
         </div>
@@ -31,6 +32,7 @@ window.Clients = (function () {
 
     document.getElementById('cliAdd')?.addEventListener('click', () => openCreate());
     document.getElementById('cliExcel')?.addEventListener('click', () => window.ExcelExport?.clients());
+    document.getElementById('cliPdf')?.addEventListener('click', () => window.PdfExport?.clients());
 
     const search = document.getElementById('cliSearch');
     if (search) {
@@ -228,7 +230,13 @@ window.Clients = (function () {
             ville: document.getElementById('f_ville').value.trim(),
             notes: document.getElementById('f_notes').value.trim(),
             contacts: workingContacts
-              .filter(ct => (ct.nom || ct.telephone || ct.email).trim ? (ct.nom || ct.telephone || ct.email).trim() : (ct.nom || ct.telephone || ct.email))
+              .filter(ct => {
+                // Garde le contact s'il a au moins un champ rempli
+                const nom = (ct.nom || '').trim();
+                const tel = (ct.telephone || '').trim();
+                const mail = (ct.email || '').trim();
+                return nom || tel || mail;
+              })
               .map(ct => ({
                 id: ct.id && !ct.id.startsWith('tmp_') ? ct.id : ('ct_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
                 nom: (ct.nom || '').trim(),
@@ -243,7 +251,7 @@ window.Clients = (function () {
 
           if (!existing) {
             const dup = Store.state.clients.find(c =>
-              c.nom.toLowerCase() === data.nom.toLowerCase() ||
+              (c.nom || '').toLowerCase() === data.nom.toLowerCase() ||
               (data.telephone && c.telephone === data.telephone) ||
               (data.email && c.email && c.email.toLowerCase() === data.email.toLowerCase())
             );
