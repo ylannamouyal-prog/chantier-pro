@@ -32,6 +32,45 @@ window.Cotes = (function () {
   function renderChantierPicker(container) {
     const chantiers = filterChantiers(Store.state.chantiers);
 
+    // Ordre d'affichage logique des statuts
+    const STATUT_ORDER = ['en-attente-cotes', 'en-attente-devis', 'commande', 'prevu', 'en-cours', 'reporte', 'termine'];
+    const STATUT_ICONS = {
+      'en-attente-cotes': '📏',
+      'en-attente-devis': '📝',
+      'commande': '📦',
+      'prevu': '📅',
+      'en-cours': '🚧',
+      'reporte': '⏸️',
+      'termine': '✅'
+    };
+
+    // Regroupe les chantiers par statut
+    const groupes = {};
+    chantiers.forEach(c => {
+      const st = Helpers.computeStatus(c);
+      if (!groupes[st]) groupes[st] = [];
+      groupes[st].push(c);
+    });
+
+    // Construit les sections dans l'ordre défini (+ statuts inconnus à la fin)
+    const statutsPresents = [
+      ...STATUT_ORDER.filter(s => groupes[s]),
+      ...Object.keys(groupes).filter(s => !STATUT_ORDER.includes(s))
+    ];
+
+    const sectionsHtml = statutsPresents.map(st => `
+      <div class="cotes-statut-group">
+        <div class="cotes-statut-group__head">
+          <span class="cotes-statut-group__icon">${STATUT_ICONS[st] || '📁'}</span>
+          <h2 class="cotes-statut-group__title">${Helpers.statusLabel(st)}</h2>
+          <span class="cotes-statut-group__count">${groupes[st].length}</span>
+        </div>
+        <div class="chantiers-picker-grid">
+          ${groupes[st].map(renderPickerCard).join('')}
+        </div>
+      </div>
+    `).join('');
+
     container.innerHTML = `
       <div class="view-header">
         <div>
@@ -49,11 +88,7 @@ window.Cotes = (function () {
         title: listSearchQuery ? 'Aucun résultat' : 'Aucun chantier',
         message: listSearchQuery ? 'Aucun chantier ne correspond à cette recherche.' : 'Créez d\'abord un chantier pour pouvoir saisir ses cotes.',
         action: !listSearchQuery ? '<a class="btn btn--primary" href="#/chantiers">→ Aller aux chantiers</a>' : ''
-      }) : `
-        <div class="chantiers-picker-grid">
-          ${chantiers.map(renderPickerCard).join('')}
-        </div>
-      `}
+      }) : sectionsHtml}
     `;
 
     const search = document.getElementById('cotesPickerSearch');
