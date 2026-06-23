@@ -321,9 +321,7 @@
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   padding: var(--s-4);
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
+  display: block;
   transition: all var(--t-base);
   cursor: pointer;
 }
