@@ -19,39 +19,43 @@ window.Search = (function () {
   }
 
   function handleInput() {
-    const q = input.value.trim().toLowerCase();
-    if (!q || q.length < 2) { hide(); return; }
+    try {
+      const q = input.value.trim().toLowerCase();
+      if (!q || q.length < 2) { hide(); return; }
 
-    const results = {
-      chantiers: searchChantiers(q),
-      clients: searchClients(q),
-      fournitures: searchFournitures(q),
-      fournisseurs: searchFournisseurs(q),
-      engins: searchEngins(q),
-      cotes: searchCotes(q)
-    };
+      const results = {
+        chantiers: searchChantiers(q),
+        clients: searchClients(q),
+        fournitures: searchFournitures(q),
+        fournisseurs: searchFournisseurs(q),
+        engins: searchEngins(q),
+        cotes: searchCotes(q)
+      };
 
-    const total = Object.values(results).reduce((s, r) => s + r.length, 0);
-    if (total === 0) {
-      dropdown.innerHTML = `<div class="search-empty">Aucun résultat pour "${Helpers.esc(q)}"</div>`;
-    } else {
-      dropdown.innerHTML = renderResults(results);
-      bindResults();
+      const total = Object.values(results).reduce((s, r) => s + r.length, 0);
+      if (total === 0) {
+        dropdown.innerHTML = `<div class="search-empty">Aucun résultat pour "${Helpers.esc(q)}"</div>`;
+      } else {
+        dropdown.innerHTML = renderResults(results);
+        bindResults();
+      }
+      show();
+    } catch (e) {
+      console.error('Erreur recherche:', e);
     }
-    show();
   }
 
   function searchChantiers(q) {
     return Store.state.chantiers.filter(c =>
-      c.titre.toLowerCase().includes(q) ||
-      c.numero.toLowerCase().includes(q) ||
+      (c.titre || '').toLowerCase().includes(q) ||
+      (c.numero || '').toLowerCase().includes(q) ||
       (c.ville || '').toLowerCase().includes(q) ||
       (c.adresse || '').toLowerCase().includes(q)
     ).slice(0, 5);
   }
   function searchClients(q) {
     return Store.state.clients.filter(c =>
-      c.nom.toLowerCase().includes(q) ||
+      (c.nom || '').toLowerCase().includes(q) ||
       (c.entreprise || '').toLowerCase().includes(q) ||
       (c.email || '').toLowerCase().includes(q) ||
       (c.telephone || '').includes(q) ||
@@ -60,19 +64,19 @@ window.Search = (function () {
   }
   function searchFournitures(q) {
     return Store.state.fournitures.filter(f =>
-      f.nom.toLowerCase().includes(q) ||
+      (f.nom || '').toLowerCase().includes(q) ||
       (f.reference || '').toLowerCase().includes(q)
     ).slice(0, 5);
   }
   function searchFournisseurs(q) {
     return (Store.state.fournisseurs || []).filter(f =>
-      f.nom.toLowerCase().includes(q) ||
+      (f.nom || '').toLowerCase().includes(q) ||
       (f.contact || '').toLowerCase().includes(q)
     ).slice(0, 3);
   }
   function searchEngins(q) {
     return (Store.state.engins || []).filter(e =>
-      e.nom.toLowerCase().includes(q) ||
+      (e.nom || '').toLowerCase().includes(q) ||
       (e.type || '').toLowerCase().includes(q)
     ).slice(0, 3);
   }
