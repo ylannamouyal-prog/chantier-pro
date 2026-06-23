@@ -12,7 +12,7 @@ window.RendezVous = (function () {
   function typeInfo(t) { return TYPES[t] || TYPES.autre; }
 
   function openForm(rdvId = null, prefillDate = null) {
-    const existing = rdvId ? Store.state.rendezVous.find(r => r.id === rdvId) : null;
+    const existing = rdvId ? Store.state.rdvs.find(r => r.id === rdvId) : null;
     const r = existing || {
       titre: '',
       type: 'visite',
@@ -153,7 +153,7 @@ window.RendezVous = (function () {
   }
 
   function openDetail(id) {
-    const r = Store.state.rendezVous.find(x => x.id === id);
+    const r = Store.state.rdvs.find(x => x.id === id);
     if (!r) return;
     const conducteur = Store.state.conducteurs.find(c => c.id === r.conducteurId);
     const client = r.clientId ? Store.state.clients.find(c => c.id === r.clientId) : null;
