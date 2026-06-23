@@ -170,7 +170,7 @@ window.PdfExport = (function () {
     let yr = y + 12;
     if (ch.adresse) { doc.text(ch.adresse, pageWidth / 2 + 3, yr); yr += 4; }
     if (ch.ville) { doc.text(ch.ville, pageWidth / 2 + 3, yr); yr += 4; }
-    doc.text(`Période : ${Format.dateShort(ch.dateDebut)} → ${Format.dateShort(ch.dateFin)}`, pageWidth / 2 + 3, yr); yr += 4;
+    doc.text(`Période : du ${Format.dateShort(ch.dateDebut)} au ${Format.dateShort(ch.dateFin)}`, pageWidth / 2 + 3, yr); yr += 4;
     const status = Helpers.computeStatus(ch);
     doc.text(`Statut : ${Helpers.statusLabel(status)}`, pageWidth / 2 + 3, yr);
 
@@ -392,7 +392,7 @@ window.PdfExport = (function () {
         head: [['Engin', 'Période']],
         body: reservations.map(r => {
           const e = Store.state.engins.find(en => en.id === r.enginId);
-          return [e?.nom || '?', `${Format.dateShort(r.dateDebut)} → ${Format.dateShort(r.dateFin)}`];
+          return [e?.nom || '?', `${Format.dateShort(r.dateDebut)} au ${Format.dateShort(r.dateFin)}`];
         }),
         theme: 'striped',
         headStyles: { fillColor: [59, 130, 246], textColor: 255 },
@@ -781,7 +781,7 @@ window.PdfExport = (function () {
       const cout = (engin?.coutJournalier || 0) * jours;
       coutTotal += cout;
       return [
-        Format.dateShort(r.dateDebut) + ' → ' + Format.dateShort(r.dateFin),
+        Format.dateShort(r.dateDebut) + ' au ' + Format.dateShort(r.dateFin),
         engin?.nom || '—',
         (engin?.disponibilite === 'location' ? '🔑 Location' : '🏭 Atelier'),
         chantier?.numero || '—',
