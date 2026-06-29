@@ -2685,6 +2685,17 @@ a.btn-icon:hover {
   border-radius: 999px;
 }
 
+/* ========== BOUTON LIEN PRODUIT (stock) ========== */
+.btn-icon--link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-icon--link:hover {
+  background: color-mix(in srgb, #3b82f6 15%, transparent);
+}
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
