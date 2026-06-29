@@ -526,6 +526,7 @@ window.Stocks = (function () {
         <td class="mono small">${seuil}</td>
         <td class="mono">${Format.euro(value)}</td>
         <td class="actions-cell">
+          ${f.lien ? `<a class="btn-icon btn-icon--link" href="${Helpers.esc(f.lien)}" target="_blank" rel="noopener noreferrer" title="Voir le produit">🔗</a>` : ''}
           <button class="btn-icon" data-stk-action="in" title="Entrée">➕</button>
           <button class="btn-icon" data-stk-action="out" title="Sortie">➖</button>
           <button class="btn-icon" data-stk-action="transfer" title="Transfert">⇄</button>
@@ -575,6 +576,11 @@ window.Stocks = (function () {
             <label>Seuil d'alerte</label>
             <input id="f_seuil" class="form-input mono" type="number" min="0" value="${f.seuilAlerte || 0}">
           </div>
+          <div class="form-field form-field--full">
+            <label>Lien vers le produit (optionnel)</label>
+            <input id="f_lien" class="form-input" type="url" placeholder="https://..." value="${Helpers.esc(f.lien || '')}">
+            <p class="hint" style="margin-top:4px">Lien vers la page du produit chez le fournisseur. Un bouton 🔗 apparaîtra sur la ligne du stock.</p>
+          </div>
         </div>
       `,
       footer: `
@@ -589,7 +595,8 @@ window.Stocks = (function () {
             categorie: document.getElementById('f_cat').value,
             unite: document.getElementById('f_unite').value,
             prixUnitaire: parseFloat(document.getElementById('f_prix').value) || 0,
-            seuilAlerte: parseInt(document.getElementById('f_seuil').value) || 0
+            seuilAlerte: parseInt(document.getElementById('f_seuil').value) || 0,
+            lien: document.getElementById('f_lien').value.trim()
           };
           if (!data.nom) { Toast.warning('Le nom est requis'); return; }
           if (existing) {
