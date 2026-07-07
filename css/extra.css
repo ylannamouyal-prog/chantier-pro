@@ -2696,6 +2696,34 @@ a.btn-icon:hover {
   background: color-mix(in srgb, #3b82f6 15%, transparent);
 }
 
+/* ========== BLOC MARGE (bilan chantier) ========== */
+.bilan-marge {
+  margin-top: var(--s-3);
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.bilan-marge__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--fs-sm);
+}
+.bilan-marge__value { font-weight: 600; font-family: var(--font-mono, monospace); }
+.bilan-marge__item--result {
+  border-top: 1px solid var(--border);
+  padding-top: var(--s-2);
+  margin-top: 2px;
+  font-size: var(--fs-md);
+}
+.bilan-marge__item--result .bilan-marge__value { font-weight: 800; }
+.bilan-marge__item--result.is-positive { color: #10b981; }
+.bilan-marge__item--result.is-negative { color: #ef4444; }
+.bilan-marge__pct { font-size: var(--fs-xs); opacity: 0.8; }
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
