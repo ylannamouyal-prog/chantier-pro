@@ -211,10 +211,6 @@ const Chantiers = {
             ${['basse','normale','haute'].map(p => `<option value="${p}" ${data.priorite === p ? 'selected' : ''}>${Helpers.capitalize(p)}</option>`).join('')}
           </select>
         </div>
-        <div class="form-group">
-          <label class="form-label">Montant facturé (€ HT)</label>
-          <input class="form-input mono" id="f-montant" type="number" min="0" step="0.01" value="${data.montantFacture || 0}" placeholder="0">
-        </div>
       </div>
 
       <div class="form-group--row">
@@ -322,7 +318,6 @@ const Chantiers = {
         dateFin:      $('#f-fin').value || null,
         statut:       $('#f-statut').value,
         priorite:     $('#f-priorite').value,
-        montantFacture: parseFloat($('#f-montant')?.value) || 0,
         notes:        $('#f-notes').value.trim()
       };
 
@@ -757,29 +752,10 @@ const Chantiers = {
           <span class="bilan-card__value">${Format.euro(bilan.totalManuelles)}</span>
         </div>
         <div class="bilan-card bilan-card--total">
-          <span class="bilan-card__label">COÛTS TOTAUX HT</span>
+          <span class="bilan-card__label">DÉBOURSÉ TOTAL HT</span>
           <span class="bilan-card__value">${Format.euro(bilan.totalGeneral)}</span>
         </div>
       </div>
-
-      ${bilan.montantFacture > 0 ? `
-        <div class="bilan-marge">
-          <div class="bilan-marge__item">
-            <span class="bilan-marge__label">💰 Montant facturé HT</span>
-            <span class="bilan-marge__value">${Format.euro(bilan.montantFacture)}</span>
-          </div>
-          <div class="bilan-marge__item">
-            <span class="bilan-marge__label">📉 Coûts</span>
-            <span class="bilan-marge__value">− ${Format.euro(bilan.totalGeneral)}</span>
-          </div>
-          <div class="bilan-marge__item bilan-marge__item--result ${bilan.marge >= 0 ? 'is-positive' : 'is-negative'}">
-            <span class="bilan-marge__label">${bilan.marge >= 0 ? '📈 Marge' : '⚠️ Perte'}</span>
-            <span class="bilan-marge__value">${Format.euro(bilan.marge)} <span class="bilan-marge__pct">(${bilan.margePourcent.toFixed(1)}%)</span></span>
-          </div>
-        </div>
-      ` : `
-        <p class="hint" style="margin-top:var(--s-2)">💡 Renseignez le <strong>montant facturé</strong> du chantier (bouton Modifier) pour voir la marge.</p>
-      `}
 
       <div class="depenses-manuelles">
         <div class="depenses-manuelles__head">
@@ -1056,7 +1032,6 @@ const Chantiers = {
           <div class="detail-item"><span class="detail-label">Équipe</span><span class="detail-value">${eq ? `${UI.colorDot(eq.couleur)} ${Helpers.esc(eq.nom)}` : '—'}</span></div>
           <div class="detail-item"><span class="detail-label">Dates</span><span class="detail-value">${Format.dateRange(c.dateDebut, c.dateFin)}</span></div>
           <div class="detail-item"><span class="detail-label">Priorité</span><span class="detail-value">${Helpers.capitalize(c.priorite || 'normale')}</span></div>
-          ${c.montantFacture > 0 ? `<div class="detail-item"><span class="detail-label">Montant facturé HT</span><span class="detail-value">${Format.euro(c.montantFacture)}</span></div>` : ''}
         </div>
       </div>
 
