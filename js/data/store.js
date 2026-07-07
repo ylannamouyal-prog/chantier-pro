@@ -155,6 +155,7 @@ const Store = {
       equipeId: null,
       statut: 'en-attente-cotes',
       priorite: 'normale',
+      montantFacture: 0,       // prix de vente HT facturé au client
       dateDebut: null,
       dateFin: null,
       notes: '',
@@ -332,10 +333,18 @@ const Store = {
     const manuelles = chantier.depensesManuelles || [];
     const totalManuelles = manuelles.reduce((s, d) => s + (parseFloat(d.montant) || 0), 0);
 
+    const totalGeneral = totalFournitures + totalCommandes + totalManuelles;
+    const montantFacture = parseFloat(chantier.montantFacture) || 0;
+    const marge = montantFacture - totalGeneral;
+    const margePourcent = montantFacture > 0 ? (marge / montantFacture) * 100 : 0;
+
     return {
       fournitures, commandes, manuelles,
       totalFournitures, totalCommandes, totalManuelles,
-      totalGeneral: totalFournitures + totalCommandes + totalManuelles
+      totalGeneral,
+      montantFacture,
+      marge,
+      margePourcent
     };
   },
 
