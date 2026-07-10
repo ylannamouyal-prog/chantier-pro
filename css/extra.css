@@ -2775,6 +2775,38 @@ a.btn-icon:hover {
   background: var(--bg-sunken);
 }
 
+/* ========== LIEUX / ADRESSES CLIENT ========== */
+.lieux-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+}
+.lieux-section-head h3 { margin: 0; }
+.lieux-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lieu-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 8px 12px;
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+  border-left: 3px solid #3b82f6;
+}
+.lieu-row__icon { font-size: 16px; flex-shrink: 0; }
+.lieu-row__info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lieu-row__info strong { font-size: var(--fs-sm); }
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
