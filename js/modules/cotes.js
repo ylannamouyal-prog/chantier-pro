@@ -1023,47 +1023,116 @@ window.Cotes = (function () {
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Distance totale estimée : ${distanceTotale.toFixed(1)} km (à vol d'oiseau)`, margin, y);
-    y += 6;
+    doc.text(`${ordre.length} chantier(s) à visiter`, margin, y);
+    y += 5;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(`${ordre.length} chantier(s) à visiter — départ et retour : ${departAdresse}`, margin, y);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Départ : ${departAdresse}`, margin, y);
     y += 8;
 
-    // Tableau de l'ordre de passage
-    if (doc.autoTable) {
-      const rows = [];
-      rows.push(['🏁', 'DÉPART', departAdresse, '—']);
-      ordre.forEach((p, i) => {
-        rows.push([
-          String(i + 1),
-          p.chantier.numero || '',
-          `${p.chantier.titre || ''}\n${p.adresse}`,
-          i === 0
-            ? distanceKm(departCoord, p.coord).toFixed(1) + ' km'
-            : distanceKm(ordre[i - 1].coord, p.coord).toFixed(1) + ' km'
-        ]);
-      });
-      rows.push(['🏁', 'RETOUR', departAdresse, distanceKm(ordre[ordre.length - 1].coord, departCoord).toFixed(1) + ' km']);
+    const pageHeight = doc.internal.pageSize.getHeight();
 
-      doc.autoTable({
-        startY: y,
-        head: [['Ordre', 'N°', 'Chantier / Adresse', 'Distance']],
-        body: rows,
-        theme: 'striped',
-        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
-        styles: { fontSize: 9, cellPadding: 3 },
-        columnStyles: { 0: { halign: 'center', cellWidth: 18 }, 3: { halign: 'right' } },
-        margin: { left: margin, right: margin }
+    // Une fiche détaillée par chantier, dans l'ordre optimisé
+    ordre.forEach((p, i) => {
+      const c = p.chantier;
+      const client = Store.state.clients.find(cl => cl.id === c.clientId);
+
+      // Contact : contact principal du client + contacts marqués afficherPdf
+      let contactNom = '', contactTel = '', contactRole = '';
+      if (client) {
+        contactNom = client.nom || '';
+        contactTel = client.telephone || '';
+        contactRole = client.role || '';
+      }
+
+      // Ce qu'il faut mesurer : catégories d'ouvrages du chantier
+      const cats = Store.getCategoriesByChantier ? Store.getCategoriesByChantier(c.id) : [];
+      const aMesurer = cats.map(cat => {
+        const nbCotes = Store.getCotesByCategorie ? Store.getCotesByCategorie(cat.id).length : 0;
+        const modele = cat.modeleId ? (Store.state.modeles || []).find(m => m.id === cat.modeleId) : null;
+        return `${cat.nom}${modele ? ' (' + modele.nom + ')' : ''}${nbCotes > 0 ? ' — ' + nbCotes + ' cote(s) déjà saisie(s)' : ''}`;
       });
-      y = doc.lastAutoTable.finalY + 8;
-    }
+
+      // Estimer la hauteur de la fiche
+      const estH = 24 + Math.max(aMesurer.length, 1) * 5 + (c.notes ? 8 : 0);
+      if (y + estH > pageHeight - 20) { doc.addPage(); y = 20; }
+
+      // Cadre de la fiche
+      doc.setDrawColor(59, 130, 246);
+      doc.setLineWidth(0.4);
+      doc.setFillColor(248, 250, 252);
+      const cardTop = y;
+
+      // Numéro d'ordre (pastille)
+      doc.setFillColor(59, 130, 246);
+      doc.circle(margin + 4, y + 4, 4, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(String(i + 1), margin + 4, y + 5.5, { align: 'center' });
+
+      // Titre du chantier
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${c.numero || ''} — ${c.titre || ''}`, margin + 11, y + 5);
+      y += 10;
+
+      // Adresse / lieu
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(40, 40, 40);
+      doc.text(`📍 ${p.adresse}`, margin + 11, y);
+      y += 5;
+
+      // Contact / demandeur
+      if (contactNom || contactTel) {
+        const contactStr = `👤 ${contactNom}${contactRole ? ' (' + contactRole + ')' : ''}${contactTel ? '  •  ☎ ' + Format.phone(contactTel) : ''}`;
+        doc.text(contactStr, margin + 11, y);
+        y += 5;
+      }
+
+      // À mesurer
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(59, 130, 246);
+      doc.text('À mesurer :', margin + 11, y);
+      y += 4.5;
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(40, 40, 40);
+      if (aMesurer.length === 0) {
+        doc.text('• (aucune catégorie d\'ouvrage définie — à créer sur place)', margin + 14, y);
+        y += 4.5;
+      } else {
+        aMesurer.forEach(m => {
+          const lines = doc.splitTextToSize('• ' + m, pageWidth - 2 * margin - 16);
+          doc.text(lines, margin + 14, y);
+          y += lines.length * 4.2;
+        });
+      }
+
+      // Notes du chantier
+      if (c.notes) {
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(100, 116, 139);
+        const noteLines = doc.splitTextToSize('📝 ' + c.notes, pageWidth - 2 * margin - 14);
+        doc.text(noteLines, margin + 11, y);
+        y += noteLines.length * 4;
+        doc.setFont('helvetica', 'normal');
+      }
+
+      // Cadre autour de la fiche
+      doc.setDrawColor(220, 224, 230);
+      doc.roundedRect(margin, cardTop - 2, pageWidth - 2 * margin, y - cardTop + 2, 2, 2, 'S');
+      y += 8;
+    });
 
     // Lien Google Maps
     const waypoints = [departCoord, ...ordre.map(p => p.coord), departCoord]
       .map(c => `${c.lat},${c.lon}`).join('/');
     const mapsUrl = `https://www.google.com/maps/dir/${waypoints}`;
 
+    if (y > pageHeight - 30) { doc.addPage(); y = 20; }
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(59, 130, 246);
@@ -1078,6 +1147,7 @@ window.Cotes = (function () {
 
     // Chantiers non localisés
     if (nonLocalises.length > 0) {
+      if (y > pageHeight - 30) { doc.addPage(); y = 20; }
       doc.setFontSize(9);
       doc.setTextColor(200, 50, 50);
       doc.text(`⚠️ ${nonLocalises.length} chantier(s) non localisé(s) (adresse introuvable) :`, margin, y);
