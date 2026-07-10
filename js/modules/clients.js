@@ -357,6 +357,28 @@ window.Clients = (function () {
             </div>
           ` : ''}
 
+          <div class="detail-section">
+            <div class="lieux-section-head">
+              <h3>📍 Lieux / Adresses <span class="hint">(${(client.lieux || []).length})</span></h3>
+              <button class="btn btn--ghost btn--sm" id="addLieuBtn">+ Ajouter un lieu</button>
+            </div>
+            ${(client.lieux || []).length === 0 ? '<p class="hint">Aucun lieu enregistré. Ajoutez les différents sites de ce client (école, mairie, gymnase...).</p>' : `
+              <div class="lieux-list">
+                ${(client.lieux || []).map(l => `
+                  <div class="lieu-row" data-lieu-id="${l.id}">
+                    <span class="lieu-row__icon">📍</span>
+                    <div class="lieu-row__info">
+                      <strong>${Helpers.esc(l.nom || '(Sans nom)')}</strong>
+                      <span class="hint">${Helpers.esc([l.adresse, l.ville].filter(Boolean).join(', ') || 'Adresse non renseignée')}</span>
+                    </div>
+                    <button class="btn-icon" data-edit-lieu="${l.id}" title="Modifier">✎</button>
+                    <button class="btn-icon btn-icon--danger" data-del-lieu="${l.id}" title="Supprimer">🗑</button>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+
           ${client.notes ? `<div class="detail-section"><h3>Notes</h3><p>${Helpers.esc(client.notes)}</p></div>` : ''}
 
           <div class="detail-section">
@@ -391,6 +413,28 @@ window.Clients = (function () {
           el.addEventListener('click', () => {
             Modal.close();
             window.Chantiers?.openDetail(el.dataset.chantier);
+          });
+        });
+
+        // Boutons Lieux
+        document.getElementById('addLieuBtn')?.addEventListener('click', () => _openLieuForm(id));
+        document.querySelectorAll('[data-edit-lieu]').forEach(btn => {
+          btn.addEventListener('click', () => _openLieuForm(id, btn.dataset.editLieu));
+        });
+        document.querySelectorAll('[data-del-lieu]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const lieuId = btn.dataset.delLieu;
+            Modal.confirm({
+              title: 'Supprimer ce lieu ?',
+              message: 'Cette adresse sera retirée du client.',
+              danger: true,
+              onConfirm: () => {
+                Store.deleteLieuFromClient(id, lieuId);
+                Toast.success('Lieu supprimé');
+                Modal.close();
+                setTimeout(() => openDetail(id), 100);
+              }
+            });
           });
         });
 
@@ -521,6 +565,56 @@ window.Clients = (function () {
         Toast.success('Client supprimé');
         Modal.close();
         if (window.Router) Router.refresh();
+      }
+    });
+  }
+
+  function _openLieuForm(clientId, lieuId = null) {
+    const lieux = Store.getLieuxByClient(clientId);
+    const existing = lieuId ? lieux.find(l => l.id === lieuId) : null;
+    const l = existing || { nom: '', adresse: '', ville: '' };
+
+    Modal.open({
+      title: existing ? 'Modifier le lieu' : '📍 Nouveau lieu',
+      size: 'small',
+      body: `
+        <div class="form-grid">
+          <div class="form-field form-field--full">
+            <label>Nom du lieu *</label>
+            <input id="lieu_nom" class="form-input" value="${Helpers.esc(l.nom)}" placeholder="Ex: École Jean Jaurès, Mairie, Gymnase..." autofocus>
+          </div>
+          <div class="form-field form-field--full">
+            <label>Adresse</label>
+            <input id="lieu_adresse" class="form-input" value="${Helpers.esc(l.adresse)}" placeholder="Ex: 12 rue de la République">
+          </div>
+          <div class="form-field form-field--full">
+            <label>Ville</label>
+            <input id="lieu_ville" class="form-input" value="${Helpers.esc(l.ville)}" placeholder="Ex: Pantin">
+          </div>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>
+        <button class="btn btn--primary" id="lieuSave">${existing ? 'Mettre à jour' : 'Ajouter'}</button>
+      `,
+      onOpen: () => {
+        document.getElementById('lieuSave').addEventListener('click', () => {
+          const data = {
+            nom: document.getElementById('lieu_nom').value.trim(),
+            adresse: document.getElementById('lieu_adresse').value.trim(),
+            ville: document.getElementById('lieu_ville').value.trim()
+          };
+          if (!data.nom) { Toast.warning('Le nom du lieu est requis'); return; }
+          if (existing) {
+            Store.updateLieuInClient(clientId, existing.id, data);
+            Toast.success('Lieu mis à jour');
+          } else {
+            Store.addLieuToClient(clientId, data);
+            Toast.success('Lieu ajouté');
+          }
+          Modal.close();
+          setTimeout(() => openDetail(clientId), 100);
+        });
       }
     });
   }
