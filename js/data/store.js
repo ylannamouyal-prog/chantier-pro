@@ -468,6 +468,7 @@ const Store = {
       notes: '',
       role: '',          // rôle du contact principal (ex: Directeur)
       contacts: [],      // contacts secondaires : [{id, nom, role, telephone, email, afficherPdf}]
+      lieux: [],         // lieux/adresses : [{id, nom, adresse, ville}]
       ...data,
       createdAt: new Date().toISOString()
     };
@@ -526,6 +527,46 @@ const Store = {
       if (!c || !c.contacts) return;
       c.contacts = c.contacts.filter(x => x.id !== contactId);
     });
+  },
+
+  // ===== LIEUX / ADRESSES d'un client =====
+  addLieuToClient(clientId, lieuData) {
+    const lieu = {
+      id: Helpers.uid('lieu_'),
+      nom: '',
+      adresse: '',
+      ville: '',
+      ...lieuData
+    };
+    this.commit('client:addLieu', s => {
+      const c = s.clients.find(x => x.id === clientId);
+      if (!c) return;
+      if (!c.lieux) c.lieux = [];
+      c.lieux.push(lieu);
+    });
+    return lieu;
+  },
+
+  updateLieuInClient(clientId, lieuId, patch) {
+    this.commit('client:updateLieu', s => {
+      const c = s.clients.find(x => x.id === clientId);
+      if (!c || !c.lieux) return;
+      const l = c.lieux.find(x => x.id === lieuId);
+      if (l) Object.assign(l, patch);
+    });
+  },
+
+  deleteLieuFromClient(clientId, lieuId) {
+    this.commit('client:deleteLieu', s => {
+      const c = s.clients.find(x => x.id === clientId);
+      if (!c || !c.lieux) return;
+      c.lieux = c.lieux.filter(x => x.id !== lieuId);
+    });
+  },
+
+  getLieuxByClient(clientId) {
+    const c = this.state.clients.find(x => x.id === clientId);
+    return (c && c.lieux) || [];
   },
 
   /** Promeut un contact secondaire au rang de contact principal (échange avec l'actuel principal) */
