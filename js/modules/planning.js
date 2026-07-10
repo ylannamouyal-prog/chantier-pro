@@ -5,6 +5,7 @@
 
 const Planning = {
   _calendar: null,
+  _currentView: 'dayGridMonth',  // mémorise la dernière vue choisie
   _filters: null,
 
   // Initialisation des filtres : tout coché par défaut
@@ -283,7 +284,7 @@ const Planning = {
 
     this._calendar = new FullCalendar.Calendar(calEl, {
       locale: 'fr',
-      initialView: 'dayGridMonth',
+      initialView: this._currentView,
       height: 'auto',
       contentHeight: 700,
       firstDay: 1,
@@ -304,6 +305,10 @@ const Planning = {
         year:  'Année'
       },
       multiMonthMaxColumns: 3,
+      // Mémorise la vue à chaque changement (mois/semaine/jour/année)
+      datesSet: (info) => {
+        Planning._currentView = info.view.type;
+      },
       events: events,
       editable: true,
       dayMaxEvents: 4,
