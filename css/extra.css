@@ -2739,6 +2739,22 @@ a.btn-icon:hover {
   cursor: pointer;
 }
 
+/* ========== TRAIT ROUGE "HEURE ACTUELLE" (planning) ========== */
+/* Le trait horizontal plus épais */
+.fc .fc-timegrid-now-indicator-line {
+  border-color: #ef4444 !important;
+  border-top-width: 3px !important;
+}
+/* Le triangle à gauche du trait, plus gros et bien visible */
+.fc .fc-timegrid-now-indicator-arrow {
+  border-color: #ef4444 !important;
+  border-width: 7px 0 7px 8px !important;
+  border-top-color: transparent !important;
+  border-bottom-color: transparent !important;
+  border-left-color: #ef4444 !important;
+  margin-top: -7px !important;
+}
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
