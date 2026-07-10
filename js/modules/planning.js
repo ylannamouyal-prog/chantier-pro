@@ -23,6 +23,106 @@ const Planning = {
     this._filters.conducteurs.add('__none__');
   },
 
+  // Fenêtre de choix pour l'export PDF du planning
+  openExportDialog() {
+    const today = new Date();
+    const iso = (d) => d.toISOString().split('T')[0];
+
+    Modal.open({
+      title: '⤓ Exporter le planning en PDF',
+      size: 'small',
+      body: `
+        <div class="form-grid">
+          <div class="form-field form-field--full">
+            <label>Période</label>
+            <select id="exp_periode" class="form-select" data-no-search>
+              <option value="semaine">Cette semaine</option>
+              <option value="mois" selected>Ce mois</option>
+              <option value="trimestre">3 prochains mois</option>
+              <option value="perso">Période personnalisée</option>
+            </select>
+          </div>
+          <div class="form-field" id="exp_dates_wrap" style="display:none">
+            <label>Du</label>
+            <input id="exp_start" class="form-input" type="date" value="${iso(today)}">
+          </div>
+          <div class="form-field" id="exp_dates_wrap2" style="display:none">
+            <label>Au</label>
+            <input id="exp_end" class="form-input" type="date" value="${iso(today)}">
+          </div>
+          <div class="form-field form-field--full">
+            <label>Contenu à inclure</label>
+            <label class="check-row"><input type="checkbox" id="exp_chantiers" checked> 🏗️ Chantiers</label>
+            <label class="check-row"><input type="checkbox" id="exp_rdvs" checked> 📅 Rendez-vous</label>
+            <label class="check-row"><input type="checkbox" id="exp_absences" checked> 🌴 Absences & congés</label>
+          </div>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>
+        <button class="btn btn--primary" id="exp_go">⤓ Générer le PDF</button>
+      `,
+      onOpen: () => {
+        const sel = document.getElementById('exp_periode');
+        const wrap1 = document.getElementById('exp_dates_wrap');
+        const wrap2 = document.getElementById('exp_dates_wrap2');
+        sel.addEventListener('change', () => {
+          const perso = sel.value === 'perso';
+          wrap1.style.display = perso ? '' : 'none';
+          wrap2.style.display = perso ? '' : 'none';
+        });
+
+        document.getElementById('exp_go').addEventListener('click', () => {
+          const now = new Date();
+          let start, end, periodeLabel;
+          switch (sel.value) {
+            case 'semaine': {
+              const day = now.getDay() || 7; // lundi=1..dimanche=7
+              start = new Date(now); start.setDate(now.getDate() - day + 1);
+              end = new Date(start); end.setDate(start.getDate() + 6);
+              periodeLabel = 'Semaine du ' + Format.dateShort(start.toISOString());
+              break;
+            }
+            case 'mois': {
+              start = new Date(now.getFullYear(), now.getMonth(), 1);
+              end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+              periodeLabel = start.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+              break;
+            }
+            case 'trimestre': {
+              start = new Date(now.getFullYear(), now.getMonth(), 1);
+              end = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+              periodeLabel = '3 mois à partir de ' + start.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+              break;
+            }
+            case 'perso': {
+              const s = document.getElementById('exp_start').value;
+              const e = document.getElementById('exp_end').value;
+              if (!s || !e) { Toast.warning('Choisissez les deux dates'); return; }
+              if (s > e) { Toast.warning('La date de fin doit être après le début'); return; }
+              start = new Date(s); end = new Date(e);
+              periodeLabel = Format.dateShort(start.toISOString()) + ' au ' + Format.dateShort(end.toISOString());
+              break;
+            }
+          }
+
+          const include = {
+            chantiers: document.getElementById('exp_chantiers').checked,
+            rdvs: document.getElementById('exp_rdvs').checked,
+            absences: document.getElementById('exp_absences').checked
+          };
+          if (!include.chantiers && !include.rdvs && !include.absences) {
+            Toast.warning('Cochez au moins un élément à inclure');
+            return;
+          }
+
+          Modal.close();
+          PdfExport.planning({ start, end, periodeLabel, include });
+        });
+      }
+    });
+  },
+
   render(container) {
     this._initFilters();
     const conducteurs = Store.state.conducteurs;
@@ -157,7 +257,7 @@ const Planning = {
 
     $('#planningNewBtn').addEventListener('click', () => Chantiers.openCreate());
     $('#planningNewRdvBtn')?.addEventListener('click', () => window.RendezVous?.openForm?.());
-    $('#planningExportPdf').addEventListener('click', () => PdfExport.planning());
+    $('#planningExportPdf').addEventListener('click', () => this.openExportDialog());
   },
 
   _allChecked(group, ids) {
