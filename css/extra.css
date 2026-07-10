@@ -2724,6 +2724,21 @@ a.btn-icon:hover {
 .bilan-marge__item--result.is-negative { color: #ef4444; }
 .bilan-marge__pct { font-size: var(--fs-xs); opacity: 0.8; }
 
+/* ========== LIGNES DE CASES À COCHER (dialogues) ========== */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px 0;
+  cursor: pointer;
+  font-size: var(--fs-sm);
+}
+.check-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
