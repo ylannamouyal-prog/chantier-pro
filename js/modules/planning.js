@@ -287,6 +287,10 @@ const Planning = {
       height: 'auto',
       contentHeight: 700,
       firstDay: 1,
+      nowIndicator: true,      // trait rouge à l'heure actuelle (vues Semaine/Jour)
+      scrollTime: '07:00:00',  // démarre l'affichage vers 7h du matin
+      slotMinTime: '06:00:00',
+      slotMaxTime: '20:00:00',
       headerToolbar: {
         left: 'prev,next today',
         center: 'title',
