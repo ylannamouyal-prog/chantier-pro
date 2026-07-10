@@ -443,9 +443,17 @@ window.PdfExport = (function () {
     Toast.success('PDF généré');
   }
 
-  function planning() {
+  function planning(options = {}) {
     const JsPDF = getJsPDF();
     if (!JsPDF) { Toast.error('Bibliothèque PDF non chargée'); return; }
+
+    // Options : { start, end, periodeLabel, include: {chantiers, rdvs, absences} }
+    const include = options.include || { chantiers: true, rdvs: true, absences: true };
+    const start = options.start ? new Date(options.start) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const end = options.end ? new Date(options.end) : new Date(new Date().getFullYear(), new Date().getMonth() + 3, 0);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    const periodeLabel = options.periodeLabel || `${Format.dateShort(start.toISOString())} au ${Format.dateShort(end.toISOString())}`;
 
     const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -460,42 +468,122 @@ window.PdfExport = (function () {
     doc.text(entreprise.nom || 'ChantierPro', margin, 12);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    doc.text('PLANNING DES CHANTIERS', margin, 20);
+    doc.text('PLANNING', margin, 20);
     doc.setFontSize(9);
-    doc.text(`Édité le ${Format.date(new Date())}`, pageWidth - margin, 12, { align: 'right' });
+    doc.text(`Période : ${periodeLabel}`, pageWidth - margin, 12, { align: 'right' });
+    doc.text(`Édité le ${Format.date(new Date())}`, pageWidth - margin, 18, { align: 'right' });
 
-    const now = new Date();
-    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endMonth = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+    let currentY = 32;
+    const overlaps = (d1, d2) => new Date(d1) <= end && new Date(d2) >= start;
 
-    const chantiers = Store.state.chantiers
-      .filter(c => new Date(c.dateFin) >= startMonth && new Date(c.dateDebut) <= endMonth)
-      .sort((a, b) => new Date(a.dateDebut) - new Date(b.dateDebut));
+    // 1) CHANTIERS
+    if (include.chantiers) {
+      const chantiers = Store.state.chantiers
+        .filter(c => c.dateDebut && c.dateFin && overlaps(c.dateDebut, c.dateFin))
+        .sort((a, b) => new Date(a.dateDebut) - new Date(b.dateDebut));
 
-    if (doc.autoTable) {
-      doc.autoTable({
-        startY: 32,
-        head: [['N°', 'Chantier', 'Client', 'Conducteur', 'Équipe', 'Début', 'Fin', 'Statut']],
-        body: chantiers.map(c => {
-          const client = Store.state.clients.find(cl => cl.id === c.clientId);
-          const cond = Store.state.conducteurs.find(co => co.id === c.conducteurId);
-          const eq = Store.state.equipes.find(e => e.id === c.equipeId);
-          return [
-            c.numero,
-            c.titre,
-            client?.nom || '—',
-            cond?.nom || '—',
-            eq?.nom || '—',
-            Format.dateShort(c.dateDebut),
-            Format.dateShort(c.dateFin),
-            Helpers.statusLabel(Helpers.computeStatus(c))
-          ];
-        }),
-        theme: 'striped',
-        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
-        styles: { fontSize: 9, cellPadding: 2.5 },
-        margin: { left: margin, right: margin }
-      });
+      if (chantiers.length > 0 && doc.autoTable) {
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('🏗️ Chantiers', margin, currentY);
+        currentY += 3;
+        doc.autoTable({
+          startY: currentY,
+          head: [['N°', 'Chantier', 'Client', 'Conducteur', 'Équipe', 'Début', 'Fin', 'Statut']],
+          body: chantiers.map(c => {
+            const client = Store.state.clients.find(cl => cl.id === c.clientId);
+            const cond = (Store.state.personnel || Store.state.conducteurs || []).find(co => co.id === c.conducteurId);
+            const eq = Store.state.equipes.find(e => e.id === c.equipeId);
+            return [
+              c.numero || '—', c.titre || '—', client?.nom || '—',
+              cond ? ([cond.prenom, cond.nom].filter(Boolean).join(' ') || cond.nom) : '—',
+              eq?.nom || '—',
+              Format.dateShort(c.dateDebut), Format.dateShort(c.dateFin),
+              Helpers.statusLabel(Helpers.computeStatus(c))
+            ];
+          }),
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+          styles: { fontSize: 8, cellPadding: 2 },
+          margin: { left: margin, right: margin }
+        });
+        currentY = doc.lastAutoTable.finalY + 8;
+      }
+    }
+
+    // 2) RENDEZ-VOUS
+    if (include.rdvs) {
+      const rdvs = (Store.state.rdvs || [])
+        .filter(r => r.date && new Date(r.date) >= start && new Date(r.date) <= end)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      if (rdvs.length > 0 && doc.autoTable) {
+        if (currentY > 170) { doc.addPage(); currentY = 20; }
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('📅 Rendez-vous', margin, currentY);
+        currentY += 3;
+        const TYPES = window.RendezVous?.TYPES || {};
+        doc.autoTable({
+          startY: currentY,
+          head: [['Date', 'Heure', 'Type', 'Titre', 'Client', 'Adresse']],
+          body: rdvs.map(r => {
+            const client = Store.state.clients.find(c => c.id === r.clientId);
+            const t = TYPES[r.type];
+            return [
+              Format.dateShort(r.date),
+              r.heure || '—',
+              t?.label || r.type || '—',
+              r.titre || '—',
+              client?.nom || '—',
+              r.adresse || '—'
+            ];
+          }),
+          theme: 'striped',
+          headStyles: { fillColor: [139, 92, 246], textColor: 255, fontStyle: 'bold' },
+          styles: { fontSize: 8, cellPadding: 2 },
+          margin: { left: margin, right: margin }
+        });
+        currentY = doc.lastAutoTable.finalY + 8;
+      }
+    }
+
+    // 3) ABSENCES / CONGÉS / ÉCOLE
+    if (include.absences) {
+      const absences = (Store.state.absences || [])
+        .filter(a => a.dateDebut && a.dateFin && overlaps(a.dateDebut, a.dateFin))
+        .sort((a, b) => new Date(a.dateDebut) - new Date(b.dateDebut));
+
+      if (absences.length > 0 && doc.autoTable) {
+        if (currentY > 170) { doc.addPage(); currentY = 20; }
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('🌴 Absences & congés', margin, currentY);
+        currentY += 3;
+        doc.autoTable({
+          startY: currentY,
+          head: [['Personne', 'Type', 'Début', 'Fin', 'Notes']],
+          body: absences.map(a => {
+            const p = (Store.state.personnel || []).find(x => x.id === a.personnelId);
+            const type = Store.getTypeAbsence ? Store.getTypeAbsence(a.typeId) : { label: a.typeId };
+            return [
+              p ? ([p.prenom, p.nom].filter(Boolean).join(' ') || p.nom) : '—',
+              type?.label || a.typeId || '—',
+              Format.dateShort(a.dateDebut),
+              Format.dateShort(a.dateFin),
+              a.notes || ''
+            ];
+          }),
+          theme: 'striped',
+          headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
+          styles: { fontSize: 8, cellPadding: 2 },
+          margin: { left: margin, right: margin }
+        });
+        currentY = doc.lastAutoTable.finalY + 8;
+      }
     }
 
     const pageCount = doc.internal.getNumberOfPages();
@@ -503,10 +591,10 @@ window.PdfExport = (function () {
       doc.setPage(i);
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
-      doc.text(`Page ${i}/${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
+      doc.text(`${entreprise.nom || 'ChantierPro'} • Page ${i}/${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
     }
 
-    doc.save(`Planning_${now.toISOString().split('T')[0]}.pdf`);
+    doc.save(`Planning_${new Date().toISOString().split('T')[0]}.pdf`);
     Toast.success('Planning PDF généré');
   }
 
