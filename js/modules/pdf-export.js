@@ -447,151 +447,189 @@ window.PdfExport = (function () {
     const JsPDF = getJsPDF();
     if (!JsPDF) { Toast.error('Bibliothèque PDF non chargée'); return; }
 
-    // Options : { start, end, periodeLabel, include: {chantiers, rdvs, absences} }
     const include = options.include || { chantiers: true, rdvs: true, absences: true };
     const start = options.start ? new Date(options.start) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const end = options.end ? new Date(options.end) : new Date(new Date().getFullYear(), new Date().getMonth() + 3, 0);
+    const end = options.end ? new Date(options.end) : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
-    const periodeLabel = options.periodeLabel || `${Format.dateShort(start.toISOString())} au ${Format.dateShort(end.toISOString())}`;
 
     const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
     const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 15;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 10;
     const entreprise = Store.state.parametres?.entreprise || {};
 
-    doc.setFillColor(15, 23, 42);
-    doc.rect(0, 0, pageWidth, 25, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text(entreprise.nom || 'ChantierPro', margin, 12);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.text('PLANNING', margin, 20);
-    doc.setFontSize(9);
-    doc.text(`Période : ${periodeLabel}`, pageWidth - margin, 12, { align: 'right' });
-    doc.text(`Édité le ${Format.date(new Date())}`, pageWidth - margin, 18, { align: 'right' });
+    const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
-    let currentY = 32;
-    const overlaps = (d1, d2) => new Date(d1) <= end && new Date(d2) >= start;
+    // Couleurs par type d'événement
+    const COL_CHANTIER = [59, 130, 246];
+    const COL_RDV = [139, 92, 246];
+    const COL_ABSENCE = [16, 185, 129];
 
-    // 1) CHANTIERS
-    if (include.chantiers) {
-      const chantiers = Store.state.chantiers
-        .filter(c => c.dateDebut && c.dateFin && overlaps(c.dateDebut, c.dateFin))
-        .sort((a, b) => new Date(a.dateDebut) - new Date(b.dateDebut));
+    // Récupère les événements d'un jour donné
+    function eventsForDay(dayDate) {
+      const dStart = new Date(dayDate); dStart.setHours(0, 0, 0, 0);
+      const dEnd = new Date(dayDate); dEnd.setHours(23, 59, 59, 999);
+      const evs = [];
 
-      if (chantiers.length > 0 && doc.autoTable) {
-        doc.setTextColor(15, 23, 42);
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('🏗️ Chantiers', margin, currentY);
-        currentY += 3;
-        doc.autoTable({
-          startY: currentY,
-          head: [['N°', 'Chantier', 'Client', 'Conducteur', 'Équipe', 'Début', 'Fin', 'Statut']],
-          body: chantiers.map(c => {
-            const client = Store.state.clients.find(cl => cl.id === c.clientId);
-            const cond = (Store.state.personnel || Store.state.conducteurs || []).find(co => co.id === c.conducteurId);
-            const eq = Store.state.equipes.find(e => e.id === c.equipeId);
-            return [
-              c.numero || '—', c.titre || '—', client?.nom || '—',
-              cond ? ([cond.prenom, cond.nom].filter(Boolean).join(' ') || cond.nom) : '—',
-              eq?.nom || '—',
-              Format.dateShort(c.dateDebut), Format.dateShort(c.dateFin),
-              Helpers.statusLabel(Helpers.computeStatus(c))
-            ];
-          }),
-          theme: 'striped',
-          headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
-          styles: { fontSize: 8, cellPadding: 2 },
-          margin: { left: margin, right: margin }
+      if (include.chantiers) {
+        (Store.state.chantiers || []).forEach(c => {
+          if (!c.dateDebut || !c.dateFin) return;
+          const cd = new Date(c.dateDebut); cd.setHours(0, 0, 0, 0);
+          const cf = new Date(c.dateFin); cf.setHours(23, 59, 59, 999);
+          if (cd <= dEnd && cf >= dStart) {
+            evs.push({ type: 'chantier', color: COL_CHANTIER, label: c.titre || c.numero || 'Chantier' });
+          }
         });
-        currentY = doc.lastAutoTable.finalY + 8;
       }
-    }
-
-    // 2) RENDEZ-VOUS
-    if (include.rdvs) {
-      const rdvs = (Store.state.rdvs || [])
-        .filter(r => r.date && new Date(r.date) >= start && new Date(r.date) <= end)
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-      if (rdvs.length > 0 && doc.autoTable) {
-        if (currentY > 170) { doc.addPage(); currentY = 20; }
-        doc.setTextColor(15, 23, 42);
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('📅 Rendez-vous', margin, currentY);
-        currentY += 3;
-        const TYPES = window.RendezVous?.TYPES || {};
-        doc.autoTable({
-          startY: currentY,
-          head: [['Date', 'Heure', 'Type', 'Titre', 'Client', 'Adresse']],
-          body: rdvs.map(r => {
-            const client = Store.state.clients.find(c => c.id === r.clientId);
-            const t = TYPES[r.type];
-            return [
-              Format.dateShort(r.date),
-              r.heure || '—',
-              t?.label || r.type || '—',
-              r.titre || '—',
-              client?.nom || '—',
-              r.adresse || '—'
-            ];
-          }),
-          theme: 'striped',
-          headStyles: { fillColor: [139, 92, 246], textColor: 255, fontStyle: 'bold' },
-          styles: { fontSize: 8, cellPadding: 2 },
-          margin: { left: margin, right: margin }
+      if (include.rdvs) {
+        (Store.state.rdvs || []).forEach(r => {
+          if (!r.date) return;
+          const rd = new Date(r.date); rd.setHours(0, 0, 0, 0);
+          if (rd.getTime() === dStart.getTime()) {
+            evs.push({ type: 'rdv', color: COL_RDV, label: (r.heure ? r.heure + ' ' : '') + (r.titre || 'RDV') });
+          }
         });
-        currentY = doc.lastAutoTable.finalY + 8;
       }
-    }
-
-    // 3) ABSENCES / CONGÉS / ÉCOLE
-    if (include.absences) {
-      const absences = (Store.state.absences || [])
-        .filter(a => a.dateDebut && a.dateFin && overlaps(a.dateDebut, a.dateFin))
-        .sort((a, b) => new Date(a.dateDebut) - new Date(b.dateDebut));
-
-      if (absences.length > 0 && doc.autoTable) {
-        if (currentY > 170) { doc.addPage(); currentY = 20; }
-        doc.setTextColor(15, 23, 42);
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('🌴 Absences & congés', margin, currentY);
-        currentY += 3;
-        doc.autoTable({
-          startY: currentY,
-          head: [['Personne', 'Type', 'Début', 'Fin', 'Notes']],
-          body: absences.map(a => {
+      if (include.absences) {
+        (Store.state.absences || []).forEach(a => {
+          if (!a.dateDebut || !a.dateFin) return;
+          const ad = new Date(a.dateDebut); ad.setHours(0, 0, 0, 0);
+          const af = new Date(a.dateFin); af.setHours(23, 59, 59, 999);
+          if (ad <= dEnd && af >= dStart) {
             const p = (Store.state.personnel || []).find(x => x.id === a.personnelId);
-            const type = Store.getTypeAbsence ? Store.getTypeAbsence(a.typeId) : { label: a.typeId };
-            return [
-              p ? ([p.prenom, p.nom].filter(Boolean).join(' ') || p.nom) : '—',
-              type?.label || a.typeId || '—',
-              Format.dateShort(a.dateDebut),
-              Format.dateShort(a.dateFin),
-              a.notes || ''
-            ];
-          }),
-          theme: 'striped',
-          headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
-          styles: { fontSize: 8, cellPadding: 2 },
-          margin: { left: margin, right: margin }
+            const nom = p ? (p.prenom || p.nom || '') : '';
+            const type = Store.getTypeAbsence ? Store.getTypeAbsence(a.typeId) : null;
+            evs.push({ type: 'absence', color: COL_ABSENCE, label: (nom ? nom + ' ' : '') + (type?.label || '') });
+          }
         });
-        currentY = doc.lastAutoTable.finalY + 8;
       }
+      return evs;
     }
 
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
+    // Dessine un mois (une page)
+    function drawMonth(year, month, isFirst) {
+      if (!isFirst) doc.addPage();
+
+      // En-tête
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, pageWidth, 18, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(15);
+      doc.setFont('helvetica', 'bold');
+      doc.text(entreprise.nom || 'ChantierPro', margin, 8);
+      doc.setFontSize(13);
+      doc.text(`${MOIS[month]} ${year}`, pageWidth / 2, 12, { align: 'center' });
       doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`${entreprise.nom || 'ChantierPro'} • Page ${i}/${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Édité le ${Format.date(new Date())}`, pageWidth - margin, 8, { align: 'right' });
+
+      // Légende
+      let lx = margin;
+      const ly = 23;
+      doc.setFontSize(7);
+      const legende = [];
+      if (include.chantiers) legende.push({ c: COL_CHANTIER, t: 'Chantiers' });
+      if (include.rdvs) legende.push({ c: COL_RDV, t: 'Rendez-vous' });
+      if (include.absences) legende.push({ c: COL_ABSENCE, t: 'Absences/Congés' });
+      legende.forEach(l => {
+        doc.setFillColor(l.c[0], l.c[1], l.c[2]);
+        doc.rect(lx, ly - 3, 3, 3, 'F');
+        doc.setTextColor(60, 60, 60);
+        doc.text(l.t, lx + 4, ly);
+        lx += doc.getTextWidth(l.t) + 12;
+      });
+
+      // Grille du calendrier
+      const gridTop = 28;
+      const gridBottom = pageHeight - 8;
+      const cellW = (pageWidth - 2 * margin) / 7;
+      const headerH = 6;
+
+      // En-têtes des jours
+      doc.setFillColor(59, 130, 246);
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      JOURS.forEach((j, i) => {
+        const x = margin + i * cellW;
+        doc.rect(x, gridTop, cellW, headerH, 'F');
+        doc.text(j, x + cellW / 2, gridTop + 4, { align: 'center' });
+      });
+
+      // Calcul des semaines du mois
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      let startOffset = (firstDay.getDay() || 7) - 1; // lundi=0
+      const totalDays = lastDay.getDate();
+      const totalCells = startOffset + totalDays;
+      const weeks = Math.ceil(totalCells / 7);
+      const cellH = (gridBottom - gridTop - headerH) / weeks;
+
+      doc.setDrawColor(210, 214, 220);
+      doc.setLineWidth(0.2);
+
+      let dayNum = 1;
+      for (let w = 0; w < weeks; w++) {
+        for (let d = 0; d < 7; d++) {
+          const cellIndex = w * 7 + d;
+          const x = margin + d * cellW;
+          const yTop = gridTop + headerH + w * cellH;
+
+          // Cellule
+          doc.setFillColor(255, 255, 255);
+          if (d >= 5) doc.setFillColor(247, 248, 250); // week-end grisé
+          doc.rect(x, yTop, cellW, cellH, 'FD');
+
+          if (cellIndex >= startOffset && dayNum <= totalDays) {
+            const thisDate = new Date(year, month, dayNum);
+            // Numéro du jour
+            doc.setTextColor(30, 41, 59);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.text(String(dayNum), x + 1.5, yTop + 4);
+
+            // Événements
+            const evs = eventsForDay(thisDate);
+            const maxShow = Math.max(1, Math.floor((cellH - 6) / 3.5));
+            doc.setFontSize(5.5);
+            doc.setFont('helvetica', 'normal');
+            evs.slice(0, maxShow).forEach((ev, idx) => {
+              const ey = yTop + 6.5 + idx * 3.4;
+              doc.setFillColor(ev.color[0], ev.color[1], ev.color[2]);
+              doc.rect(x + 1, ey - 2, cellW - 2, 3, 'F');
+              doc.setTextColor(255, 255, 255);
+              let txt = ev.label;
+              const maxChars = Math.floor((cellW - 3) / 1.1);
+              if (txt.length > maxChars) txt = txt.slice(0, maxChars - 1) + '…';
+              doc.text(txt, x + 1.8, ey + 0.3);
+            });
+            if (evs.length > maxShow) {
+              doc.setTextColor(120, 120, 120);
+              doc.setFontSize(5);
+              doc.text(`+${evs.length - maxShow}`, x + 1.8, yTop + 6.5 + maxShow * 3.4);
+            }
+            dayNum++;
+          }
+        }
+      }
+
+      // Pied de page
+      doc.setFontSize(7);
+      doc.setTextColor(120, 120, 120);
+      doc.text(`${entreprise.nom || 'ChantierPro'}`, pageWidth / 2, pageHeight - 3, { align: 'center' });
+    }
+
+    // Génère une page par mois couvrant la période
+    let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    let isFirst = true;
+    let guard = 0;
+    while (cursor <= end && guard < 36) {
+      drawMonth(cursor.getFullYear(), cursor.getMonth(), isFirst);
+      isFirst = false;
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      guard++;
     }
 
     doc.save(`Planning_${new Date().toISOString().split('T')[0]}.pdf`);
