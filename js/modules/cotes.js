@@ -77,6 +77,9 @@ window.Cotes = (function () {
           <h1 class="view-title">📐 Prises de cotes</h1>
           <p class="view-subtitle">Sélectionnez un chantier pour saisir ou consulter ses cotes</p>
         </div>
+        <div class="view-header__actions">
+          <button class="btn btn--primary" id="cotesTourneeBtn">🚗 Optimiser une tournée</button>
+        </div>
       </div>
 
       <div class="filters">
@@ -90,6 +93,8 @@ window.Cotes = (function () {
         action: !listSearchQuery ? '<a class="btn btn--primary" href="#/chantiers">→ Aller aux chantiers</a>' : ''
       }) : sectionsHtml}
     `;
+
+    document.getElementById('cotesTourneeBtn')?.addEventListener('click', () => openTourneeDialog());
 
     const search = document.getElementById('cotesPickerSearch');
     if (search) {
@@ -845,6 +850,251 @@ window.Cotes = (function () {
         if (window.Router) Router.refresh();
       }
     });
+  }
+
+  // ============================================================
+  // TOURNÉE OPTIMISÉE (prises de cotes)
+  // ============================================================
+  const ATELIER_DEFAUT = '20 Rue de la régale, Courtry 77181';
+
+  function openTourneeDialog() {
+    // Chantiers ayant une adresse renseignée
+    const chantiers = (Store.state.chantiers || []).filter(c => {
+      const st = Helpers.computeStatus(c);
+      return st !== 'termine' && (c.adresse || c.ville);
+    });
+
+    if (chantiers.length === 0) {
+      Toast.warning('Aucun chantier avec une adresse à visiter.');
+      return;
+    }
+
+    const departSauve = localStorage.getItem('tournee_depart') || ATELIER_DEFAUT;
+
+    Modal.open({
+      title: '🚗 Optimiser une tournée de prises de cotes',
+      size: 'medium',
+      body: `
+        <div class="form-field form-field--full" style="margin-bottom:var(--s-3)">
+          <label>Point de départ (et retour)</label>
+          <input id="tournee_depart" class="form-input" value="${Helpers.esc(departSauve)}" placeholder="Adresse de départ">
+          <p class="hint" style="margin-top:4px">Par défaut : l'atelier. La tournée revient à ce point à la fin.</p>
+        </div>
+        <div class="form-field form-field--full">
+          <label>Chantiers à visiter (${chantiers.length} disponibles)</label>
+          <div class="tournee-select-list">
+            ${chantiers.map(c => `
+              <label class="check-row">
+                <input type="checkbox" class="tournee-chk" value="${c.id}">
+                <span>
+                  <strong>${Helpers.esc(c.numero || '')}</strong> — ${Helpers.esc(c.titre || '')}
+                  <span class="hint" style="display:block">${Helpers.esc([c.adresse, c.ville].filter(Boolean).join(', ') || 'Adresse incomplète')}</span>
+                </span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn--ghost" onclick="Modal.close()">Annuler</button>
+        <button class="btn btn--primary" id="tourneeGo">🗺️ Calculer la tournée</button>
+      `,
+      onOpen: () => {
+        document.getElementById('tourneeGo').addEventListener('click', async () => {
+          const depart = document.getElementById('tournee_depart').value.trim();
+          if (!depart) { Toast.warning('Indiquez un point de départ'); return; }
+          localStorage.setItem('tournee_depart', depart);
+
+          const ids = Array.from(document.querySelectorAll('.tournee-chk:checked')).map(c => c.value);
+          if (ids.length < 1) { Toast.warning('Sélectionnez au moins un chantier'); return; }
+
+          const selected = ids.map(id => Store.state.chantiers.find(c => c.id === id)).filter(Boolean);
+          Modal.close();
+          await calculerTournee(depart, selected);
+        });
+      }
+    });
+  }
+
+  // Géocode une adresse via Nominatim (OpenStreetMap, gratuit)
+  async function geocode(adresse) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(adresse)}`;
+    try {
+      const res = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
+      const data = await res.json();
+      if (data && data.length > 0) {
+        return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+      }
+    } catch (e) {
+      console.error('Erreur géocodage:', adresse, e);
+    }
+    return null;
+  }
+
+  // Distance à vol d'oiseau (Haversine) en km
+  function distanceKm(a, b) {
+    const R = 6371;
+    const dLat = (b.lat - a.lat) * Math.PI / 180;
+    const dLon = (b.lon - a.lon) * Math.PI / 180;
+    const lat1 = a.lat * Math.PI / 180;
+    const lat2 = b.lat * Math.PI / 180;
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  }
+
+  async function calculerTournee(departAdresse, chantiers) {
+    Toast.info('Calcul de la tournée en cours... (géocodage des adresses)');
+
+    // 1) Géocoder le départ
+    const departCoord = await geocode(departAdresse);
+    if (!departCoord) {
+      Toast.error('Impossible de localiser le point de départ. Vérifiez l\'adresse.');
+      return;
+    }
+
+    // 2) Géocoder chaque chantier (avec délai pour respecter Nominatim : 1/s)
+    const points = [];
+    const nonLocalises = [];
+    for (const c of chantiers) {
+      const adr = [c.adresse, c.ville].filter(Boolean).join(', ');
+      const coord = await geocode(adr);
+      if (coord) {
+        points.push({ chantier: c, coord, adresse: adr });
+      } else {
+        nonLocalises.push(c);
+      }
+      await new Promise(r => setTimeout(r, 1100)); // respect de la limite Nominatim
+    }
+
+    if (points.length === 0) {
+      Toast.error('Aucune adresse n\'a pu être localisée.');
+      return;
+    }
+
+    // 3) Algorithme du plus proche voisin (départ → ... → départ)
+    const ordre = [];
+    const restants = [...points];
+    let position = departCoord;
+    let distanceTotale = 0;
+
+    while (restants.length > 0) {
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      restants.forEach((p, i) => {
+        const d = distanceKm(position, p.coord);
+        if (d < bestDist) { bestDist = d; bestIdx = i; }
+      });
+      const next = restants.splice(bestIdx, 1)[0];
+      distanceTotale += bestDist;
+      ordre.push(next);
+      position = next.coord;
+    }
+    // Retour au départ
+    distanceTotale += distanceKm(position, departCoord);
+
+    // 4) Générer le PDF
+    genererPdfTournee(departAdresse, departCoord, ordre, distanceTotale, nonLocalises);
+    Toast.success('Tournée calculée !');
+  }
+
+  function genererPdfTournee(departAdresse, departCoord, ordre, distanceTotale, nonLocalises) {
+    const JsPDF = window.jspdf?.jsPDF || window.jsPDF;
+    if (!JsPDF) { Toast.error('Bibliothèque PDF non chargée'); return; }
+
+    const doc = new JsPDF({ unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    const entreprise = Store.state.parametres?.entreprise || {};
+
+    // En-tête
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageWidth, 28, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(entreprise.nom || 'ChantierPro', margin, 12);
+    doc.setFontSize(13);
+    doc.text('TOURNÉE DE PRISES DE COTES', margin, 20);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Édité le ${Format.date(new Date())}`, pageWidth - margin, 12, { align: 'right' });
+
+    let y = 38;
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Distance totale estimée : ${distanceTotale.toFixed(1)} km (à vol d'oiseau)`, margin, y);
+    y += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`${ordre.length} chantier(s) à visiter — départ et retour : ${departAdresse}`, margin, y);
+    y += 8;
+
+    // Tableau de l'ordre de passage
+    if (doc.autoTable) {
+      const rows = [];
+      rows.push(['🏁', 'DÉPART', departAdresse, '—']);
+      ordre.forEach((p, i) => {
+        rows.push([
+          String(i + 1),
+          p.chantier.numero || '',
+          `${p.chantier.titre || ''}\n${p.adresse}`,
+          i === 0
+            ? distanceKm(departCoord, p.coord).toFixed(1) + ' km'
+            : distanceKm(ordre[i - 1].coord, p.coord).toFixed(1) + ' km'
+        ]);
+      });
+      rows.push(['🏁', 'RETOUR', departAdresse, distanceKm(ordre[ordre.length - 1].coord, departCoord).toFixed(1) + ' km']);
+
+      doc.autoTable({
+        startY: y,
+        head: [['Ordre', 'N°', 'Chantier / Adresse', 'Distance']],
+        body: rows,
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 9, cellPadding: 3 },
+        columnStyles: { 0: { halign: 'center', cellWidth: 18 }, 3: { halign: 'right' } },
+        margin: { left: margin, right: margin }
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    }
+
+    // Lien Google Maps
+    const waypoints = [departCoord, ...ordre.map(p => p.coord), departCoord]
+      .map(c => `${c.lat},${c.lon}`).join('/');
+    const mapsUrl = `https://www.google.com/maps/dir/${waypoints}`;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(59, 130, 246);
+    doc.textWithLink('🗺️ Ouvrir l\'itinéraire complet dans Google Maps', margin, y, { url: mapsUrl });
+    y += 6;
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    const urlLines = doc.splitTextToSize(mapsUrl, pageWidth - 2 * margin);
+    doc.text(urlLines, margin, y);
+    y += urlLines.length * 3 + 4;
+
+    // Chantiers non localisés
+    if (nonLocalises.length > 0) {
+      doc.setFontSize(9);
+      doc.setTextColor(200, 50, 50);
+      doc.text(`⚠️ ${nonLocalises.length} chantier(s) non localisé(s) (adresse introuvable) :`, margin, y);
+      y += 5;
+      doc.setTextColor(80, 80, 80);
+      nonLocalises.forEach(c => {
+        doc.text(`• ${c.numero || ''} ${c.titre || ''}`, margin + 3, y);
+        y += 4;
+      });
+    }
+
+    // Pied de page
+    doc.setFontSize(7);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`${entreprise.nom || 'ChantierPro'} • Tournée optimisée`, pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
+
+    doc.save(`Tournee_${new Date().toISOString().split('T')[0]}.pdf`);
   }
 
   return {
