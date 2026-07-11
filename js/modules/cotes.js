@@ -1076,19 +1076,19 @@ window.Cotes = (function () {
       doc.setTextColor(15, 23, 42);
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${c.numero || ''} — ${c.titre || ''}`, margin + 11, y + 5);
+      doc.text(`${c.numero || ''} - ${c.titre || ''}`, margin + 11, y + 5);
       y += 10;
 
       // Adresse / lieu
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(40, 40, 40);
-      doc.text(`📍 ${p.adresse}`, margin + 11, y);
+      doc.text(`Adresse : ${p.adresse}`, margin + 11, y);
       y += 5;
 
       // Contact / demandeur
       if (contactNom || contactTel) {
-        const contactStr = `👤 ${contactNom}${contactRole ? ' (' + contactRole + ')' : ''}${contactTel ? '  •  ☎ ' + Format.phone(contactTel) : ''}`;
+        const contactStr = `Contact : ${contactNom}${contactRole ? ' (' + contactRole + ')' : ''}${contactTel ? '  -  Tel : ' + Format.phone(contactTel) : ''}`;
         doc.text(contactStr, margin + 11, y);
         y += 5;
       }
@@ -1101,11 +1101,11 @@ window.Cotes = (function () {
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(40, 40, 40);
       if (aMesurer.length === 0) {
-        doc.text('• (aucune catégorie d\'ouvrage définie — à créer sur place)', margin + 14, y);
+        doc.text('- (aucune catégorie d\'ouvrage définie, à créer sur place)', margin + 14, y);
         y += 4.5;
       } else {
         aMesurer.forEach(m => {
-          const lines = doc.splitTextToSize('• ' + m, pageWidth - 2 * margin - 16);
+          const lines = doc.splitTextToSize('- ' + m, pageWidth - 2 * margin - 16);
           doc.text(lines, margin + 14, y);
           y += lines.length * 4.2;
         });
@@ -1115,7 +1115,7 @@ window.Cotes = (function () {
       if (c.notes) {
         doc.setFont('helvetica', 'italic');
         doc.setTextColor(100, 116, 139);
-        const noteLines = doc.splitTextToSize('📝 ' + c.notes, pageWidth - 2 * margin - 14);
+        const noteLines = doc.splitTextToSize('Notes : ' + c.notes, pageWidth - 2 * margin - 14);
         doc.text(noteLines, margin + 11, y);
         y += noteLines.length * 4;
         doc.setFont('helvetica', 'normal');
@@ -1136,7 +1136,7 @@ window.Cotes = (function () {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(59, 130, 246);
-    doc.textWithLink('🗺️ Ouvrir l\'itinéraire complet dans Google Maps', margin, y, { url: mapsUrl });
+    doc.textWithLink('>> Ouvrir l\'itinéraire complet dans Google Maps', margin, y, { url: mapsUrl });
     y += 6;
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
@@ -1150,11 +1150,11 @@ window.Cotes = (function () {
       if (y > pageHeight - 30) { doc.addPage(); y = 20; }
       doc.setFontSize(9);
       doc.setTextColor(200, 50, 50);
-      doc.text(`⚠️ ${nonLocalises.length} chantier(s) non localisé(s) (adresse introuvable) :`, margin, y);
+      doc.text(`Attention : ${nonLocalises.length} chantier(s) non localisé(s) (adresse introuvable) :`, margin, y);
       y += 5;
       doc.setTextColor(80, 80, 80);
       nonLocalises.forEach(c => {
-        doc.text(`• ${c.numero || ''} ${c.titre || ''}`, margin + 3, y);
+        doc.text(`- ${c.numero || ''} ${c.titre || ''}`, margin + 3, y);
         y += 4;
       });
     }
@@ -1162,7 +1162,7 @@ window.Cotes = (function () {
     // Pied de page
     doc.setFontSize(7);
     doc.setTextColor(120, 120, 120);
-    doc.text(`${entreprise.nom || 'ChantierPro'} • Tournée optimisée`, pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
+    doc.text(`${entreprise.nom || 'ChantierPro'} - Tournée optimisée`, pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
 
     doc.save(`Tournee_${new Date().toISOString().split('T')[0]}.pdf`);
   }
