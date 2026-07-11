@@ -604,6 +604,7 @@ window.Cotes = (function () {
         </div>
         <div class="cote-surface">
           <strong>${surface.toFixed(3)} m²</strong>
+          ${cote.prix > 0 ? `<span class="cote-prix">${Format.euro(cote.prix)}</span>` : ''}
         </div>
         <div class="cote-type">
           ${cote.type ? `<span class="badge badge--info">${Helpers.esc(cote.type)}</span>` : ''}
@@ -652,6 +653,10 @@ window.Cotes = (function () {
             <input id="f_quantite" class="form-input" type="number" min="1" value="${c.quantite || 1}">
           </div>
           <div class="form-field">
+            <label>Prix fourniture (€ HT)</label>
+            <input id="f_prix" class="form-input mono" type="number" min="0" step="0.01" placeholder="0" value="${c.prix || ''}">
+          </div>
+          <div class="form-field">
             <label>Type d'ouvrage</label>
             <select id="f_type" class="form-select">
               ${['Vitrage', 'Double vitrage', 'Triple vitrage', 'Store BSO', 'Store intérieur', 'Menuiserie', 'Porte', 'Autre']
@@ -692,6 +697,7 @@ window.Cotes = (function () {
             largeur: parseFloat(document.getElementById('f_largeur').value) || 0,
             hauteur: parseFloat(document.getElementById('f_hauteur').value) || 0,
             quantite: parseInt(document.getElementById('f_quantite').value) || 1,
+            prix: parseFloat(document.getElementById('f_prix').value) || 0,
             type: document.getElementById('f_type').value,
             notes: document.getElementById('f_notes').value.trim()
           };
