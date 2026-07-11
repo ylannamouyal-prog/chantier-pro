@@ -2807,6 +2807,15 @@ a.btn-icon:hover {
 }
 .lieu-row__info strong { font-size: var(--fs-sm); }
 
+/* ========== PRIX SUR LES COTES ========== */
+.cote-prix {
+  display: block;
+  font-size: var(--fs-xs);
+  color: #10b981;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
