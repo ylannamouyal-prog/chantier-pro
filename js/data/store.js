@@ -316,6 +316,10 @@ const Store = {
       totalFournitures = fournitures.reduce((s, f) => s + (f.total || 0), 0);
     }
 
+    // 1bis) Prix saisis manuellement sur chaque cote (vitrage 55€, etc.)
+    const totalPrixCotes = cotes.reduce((s, c) => s + ((parseFloat(c.prix) || 0) * (c.quantite || 1)), 0);
+    totalFournitures += totalPrixCotes;
+
     // 2) Commandes réelles passées pour ce chantier
     const commandes = (this.state.commandes || [])
       .filter(c => c.chantierId === chantierId && c.statut !== 'annulee');
@@ -631,6 +635,7 @@ const Store = {
       largeur: 0,
       hauteur: 0,
       quantite: 1,
+      prix: 0,           // prix de la fourniture pour cette cote (€ HT)
       acces: '',
       notes: '',
       order: this.state.cotes.length,
