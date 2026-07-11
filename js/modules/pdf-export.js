@@ -198,10 +198,12 @@ window.PdfExport = (function () {
       y += 3;
 
       const totalSurface = cotes.reduce((s, c) => s + (c.largeur * c.hauteur * (c.quantite || 1)) / 1000000, 0);
+      const totalPrixCotes = cotes.reduce((s, c) => s + ((parseFloat(c.prix) || 0) * (c.quantite || 1)), 0);
+      const hasPrix = cotes.some(c => (parseFloat(c.prix) || 0) > 0);
 
       doc.autoTable({
         startY: y + 2,
-        head: [['N°', 'Emplacement', 'L (mm)', 'H (mm)', 'Qté', 'Surface', 'Type']],
+        head: [['N°', 'Emplacement', 'L (mm)', 'H (mm)', 'Qté', 'Surface', 'Type', 'Prix HT']],
         body: cotes.map((c, i) => [
           String(i + 1).padStart(2, '0'),
           c.emplacement || '',
@@ -209,13 +211,15 @@ window.PdfExport = (function () {
           c.hauteur,
           c.quantite || 1,
           ((c.largeur * c.hauteur * (c.quantite || 1)) / 1000000).toFixed(3) + ' m²',
-          c.type || ''
+          c.type || '',
+          (parseFloat(c.prix) || 0) > 0 ? ((parseFloat(c.prix) || 0) * (c.quantite || 1)).toFixed(2) + ' €' : '-'
         ]),
-        foot: [['', 'TOTAL', '', '', cotes.reduce((s, c) => s + (c.quantite || 1), 0), totalSurface.toFixed(3) + ' m²', '']],
+        foot: [['', 'TOTAL', '', '', cotes.reduce((s, c) => s + (c.quantite || 1), 0), totalSurface.toFixed(3) + ' m²', '', hasPrix ? totalPrixCotes.toFixed(2) + ' €' : '-']],
         theme: 'striped',
         headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
         footStyles: { fillColor: [241, 245, 249], textColor: 15, fontStyle: 'bold' },
         styles: { fontSize: 9, cellPadding: 3 },
+        columnStyles: { 7: { halign: 'right' } },
         margin: { left: margin, right: margin }
       });
       y = doc.lastAutoTable.finalY + 8;
