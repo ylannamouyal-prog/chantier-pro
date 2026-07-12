@@ -149,6 +149,8 @@ const Store = {
       numero: Helpers.chantierNumber(this.state.chantiers),
       titre: '',
       clientId: null,
+      lieuId: null,        // lieu du client (école, mairie...)
+      contactId: null,     // contact du client pour ce chantier
       ville: '',
       adresse: '',
       conducteurId: null,
@@ -653,6 +655,35 @@ const Store = {
   getLieuxByClient(clientId) {
     const c = this.state.clients.find(x => x.id === clientId);
     return (c && c.lieux) || [];
+  },
+
+  /** Récupère le contact sélectionné pour un chantier (avec ses coordonnées) */
+  getContactChantier(chantierId) {
+    const ch = this.state.chantiers.find(c => c.id === chantierId);
+    if (!ch || !ch.contactId || !ch.clientId) return null;
+    const client = this.state.clients.find(c => c.id === ch.clientId);
+    if (!client) return null;
+
+    // Contact principal du client
+    if (ch.contactId === '__principal__') {
+      return {
+        nom: client.nom || '',
+        role: client.role || '',
+        telephone: client.telephone || '',
+        email: client.email || ''
+      };
+    }
+    // Contact secondaire
+    const ct = (client.contacts || []).find(x => x.id === ch.contactId);
+    return ct || null;
+  },
+
+  /** Récupère le lieu sélectionné pour un chantier */
+  getLieuChantier(chantierId) {
+    const ch = this.state.chantiers.find(c => c.id === chantierId);
+    if (!ch || !ch.lieuId || !ch.clientId) return null;
+    const lieux = this.getLieuxByClient(ch.clientId);
+    return lieux.find(l => l.id === ch.lieuId) || null;
   },
 
   /** Promeut un contact secondaire au rang de contact principal (échange avec l'actuel principal) */
