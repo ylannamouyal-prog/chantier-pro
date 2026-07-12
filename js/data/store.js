@@ -303,6 +303,89 @@ const Store = {
    * Retourne { fournitures: [...], commandes: [...], manuelles: [...],
    *            totalFournitures, totalCommandes, totalManuelles, totalGeneral }
    */
+  // ============================================================
+  // MAIN D'ŒUVRE — calcul des heures selon les horaires de l'entreprise
+  // Lundi à jeudi : 7h30-12h + 13h30-17h = 8h
+  // Vendredi : 7h30-12h + 13h30-16h = 7h
+  // ============================================================
+  HEURES_PAR_JOUR: { 1: 8, 2: 8, 3: 8, 4: 8, 5: 7 }, // 1=lundi ... 5=vendredi
+
+  /** Compte les heures ouvrées entre 2 dates (week-ends exclus) */
+  calculerHeuresOuvrees(dateDebut, dateFin) {
+    if (!dateDebut || !dateFin) return 0;
+    const d = new Date(dateDebut);
+    const fin = new Date(dateFin);
+    d.setHours(0, 0, 0, 0);
+    fin.setHours(0, 0, 0, 0);
+    let heures = 0;
+    let guard = 0;
+    while (d <= fin && guard < 3650) {
+      const jour = d.getDay(); // 0=dimanche, 6=samedi
+      heures += this.HEURES_PAR_JOUR[jour] || 0;
+      d.setDate(d.getDate() + 1);
+      guard++;
+    }
+    return heures;
+  },
+
+  /**
+   * Calcule le coût de main d'œuvre d'un chantier.
+   * Utilise l'équipe assignée (snapshot ou équipe actuelle) et les taux horaires.
+   * Si chantier.heuresManuelles est défini, l'utilise à la place du calcul auto.
+   */
+  getMainOeuvreChantier(chantierId) {
+    const chantier = this.state.chantiers.find(c => c.id === chantierId);
+    if (!chantier) return { membres: [], totalHeures: 0, totalCout: 0, heuresParPersonne: 0, auto: true };
+
+    // Heures : manuelles si saisies, sinon calculées depuis les dates
+    const heuresAuto = this.calculerHeuresOuvrees(chantier.dateDebut, chantier.dateFin);
+    const heuresParPersonne = (chantier.heuresManuelles != null && chantier.heuresManuelles !== '')
+      ? parseFloat(chantier.heuresManuelles)
+      : heuresAuto;
+    const auto = !(chantier.heuresManuelles != null && chantier.heuresManuelles !== '');
+
+    // Membres : snapshot figé si présent, sinon équipe actuelle
+    let membresIds = [];
+    if (chantier.equipeSnapshot && chantier.equipeSnapshot.membresIds) {
+      membresIds = chantier.equipeSnapshot.membresIds;
+      if (chantier.equipeSnapshot.chefId) membresIds = [chantier.equipeSnapshot.chefId, ...membresIds];
+    } else if (chantier.equipeId) {
+      const eq = (this.state.equipes || []).find(e => e.id === chantier.equipeId);
+      if (eq) {
+        membresIds = [...(eq.membresIds || [])];
+        if (eq.chefId) membresIds = [eq.chefId, ...membresIds];
+      }
+    }
+    membresIds = [...new Set(membresIds)]; // dédoublonne
+
+    const membres = membresIds.map(id => {
+      const p = (this.state.personnel || []).find(x => x.id === id);
+      if (!p) return null;
+      const taux = parseFloat(p.tauxHoraire) || 0;
+      return {
+        id: p.id,
+        nom: [p.prenom, p.nom].filter(Boolean).join(' ') || p.nom,
+        role: p.role,
+        tauxHoraire: taux,
+        heures: heuresParPersonne,
+        cout: heuresParPersonne * taux
+      };
+    }).filter(Boolean);
+
+    const totalCout = membres.reduce((s, m) => s + m.cout, 0);
+    const totalHeures = membres.length * heuresParPersonne;
+
+    return { membres, totalHeures, totalCout, heuresParPersonne, heuresAuto, auto };
+  },
+
+  /** Définit un nombre d'heures manuel pour un chantier (null = retour au calcul auto) */
+  setHeuresChantier(chantierId, heures) {
+    this.commit('chantier:heures', s => {
+      const c = s.chantiers.find(x => x.id === chantierId);
+      if (c) c.heuresManuelles = (heures === null || heures === '') ? null : parseFloat(heures);
+    });
+  },
+
   getBilanChantier(chantierId) {
     const chantier = this.state.chantiers.find(c => c.id === chantierId);
     if (!chantier) return null;
@@ -337,18 +420,17 @@ const Store = {
     const manuelles = chantier.depensesManuelles || [];
     const totalManuelles = manuelles.reduce((s, d) => s + (parseFloat(d.montant) || 0), 0);
 
-    const totalGeneral = totalFournitures + totalCommandes + totalManuelles;
-    const montantFacture = parseFloat(chantier.montantFacture) || 0;
-    const marge = montantFacture - totalGeneral;
-    const margePourcent = montantFacture > 0 ? (marge / montantFacture) * 100 : 0;
+    // 4) Main d'œuvre (équipe assignée × heures × taux horaires)
+    const mainOeuvre = this.getMainOeuvreChantier(chantierId);
+    const totalMainOeuvre = mainOeuvre.totalCout;
+
+    const totalGeneral = totalFournitures + totalCommandes + totalManuelles + totalMainOeuvre;
 
     return {
       fournitures, commandes, manuelles,
       totalFournitures, totalCommandes, totalManuelles,
-      totalGeneral,
-      montantFacture,
-      marge,
-      margePourcent
+      mainOeuvre, totalMainOeuvre,
+      totalGeneral
     };
   },
 
