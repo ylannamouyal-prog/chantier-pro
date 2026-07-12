@@ -4035,3 +4035,182 @@ a.btn-icon:hover {
   .clients-grid, .engins-grid, .fournisseurs-grid, .equipes-grid { grid-template-columns: 1fr; }
   .view-header { flex-direction: column; align-items: stretch; }
 }
+
+/* =================================================================
+   RESPONSIVE MOBILE — Nouveaux modules (main d'œuvre, articles,
+   lieux, tournée, bilan, prix cotes, groupes par statut...)
+   ================================================================= */
+
+/* ---------- Tablettes et petits écrans ---------- */
+@media (max-width: 900px) {
+  .art-list {
+    grid-template-columns: 1fr;
+  }
+  .bilan-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ---------- Mobiles ---------- */
+@media (max-width: 640px) {
+  /* Cartes de bilan : une par ligne */
+  .bilan-cards {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .bilan-card {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+  }
+
+  /* Main d'œuvre : empilé et lisible */
+  .mo-block__head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .mo-row {
+    grid-template-columns: 1fr auto;
+    gap: 4px 8px;
+    padding: 10px;
+  }
+  .mo-row__nom { grid-column: 1 / -1; }
+  .mo-row__taux { font-size: var(--fs-xs); }
+  .mo-row__heures { text-align: left; }
+  .mo-row__cout { text-align: right; }
+
+  /* Articles spécifiques */
+  .art-card__head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .art-card__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .art-card__actions > .btn,
+  .art-card__actions > .btn--ghost {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Lieux, écoles, manques : empilés */
+  .lieu-row,
+  .ecole-row,
+  .manque-row {
+    flex-wrap: wrap;
+    padding: 10px;
+  }
+  .manque-row__name { min-width: 100%; }
+
+  /* Boutons d'action des dépenses : pleine largeur */
+  .depenses-manuelles__actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .depenses-manuelles__actions .btn {
+    width: 100%;
+  }
+  .depenses-manuelles__head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  /* Lignes de fournitures dans les ouvrages : empilées */
+  .modele-ligne-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .modele-ligne-row .ligne-unite {
+    text-align: left;
+  }
+
+  /* Sections de la tournée */
+  .tournee-select-list {
+    max-height: 240px;
+  }
+
+  /* Groupes par statut (prises de cotes) */
+  .cotes-statut-group__head {
+    flex-wrap: wrap;
+  }
+  .cotes-statut-group__title {
+    font-size: var(--fs-md);
+  }
+
+  /* Sections avec bouton à droite : empilées */
+  .lieux-section-head,
+  .ecole-section-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .lieux-section-head .btn,
+  .ecole-section-head .btn {
+    width: 100%;
+  }
+
+  /* Formulaires : champs pleine largeur */
+  .form-group--row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .form-group--row .form-group {
+    width: 100%;
+  }
+
+  /* Cartes clients : éviter les débordements */
+  .client-card__stats {
+    flex-wrap: wrap;
+  }
+
+  /* Cases à cocher : plus faciles à toucher */
+  .check-row {
+    padding: 10px 6px;
+  }
+  .check-row input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Boutons : taille tactile confortable */
+  .btn-icon {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  /* Marge de sécurité pour le bloc marge/main d'œuvre */
+  .mo-block,
+  .manques-block {
+    padding: 12px;
+  }
+}
+
+/* ---------- Très petits écrans ---------- */
+@media (max-width: 400px) {
+  .art-card,
+  .mo-block,
+  .manques-block {
+    padding: 10px;
+  }
+  .cotes-statut-group__count {
+    font-size: var(--fs-xs);
+  }
+}
+
+/* Scroll fluide des tableaux sur mobile (défilement au doigt) */
+@media (max-width: 768px) {
+  .table-wrap,
+  .cotes-table-wrap {
+    -webkit-overflow-scrolling: touch;
+    overflow-x: auto;
+  }
+  /* Indication visuelle qu'on peut scroller */
+  .table-wrap table,
+  .cotes-table-wrap table {
+    min-width: 600px;
+  }
+}
