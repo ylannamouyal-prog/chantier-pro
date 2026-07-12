@@ -751,11 +751,47 @@ const Chantiers = {
           <span class="bilan-card__label">✍️ Dépenses manuelles</span>
           <span class="bilan-card__value">${Format.euro(bilan.totalManuelles)}</span>
         </div>
+        <div class="bilan-card">
+          <span class="bilan-card__label">👷 Main d'œuvre</span>
+          <span class="bilan-card__value">${Format.euro(bilan.totalMainOeuvre || 0)}</span>
+        </div>
         <div class="bilan-card bilan-card--total">
           <span class="bilan-card__label">DÉBOURSÉ TOTAL HT</span>
           <span class="bilan-card__value">${Format.euro(bilan.totalGeneral)}</span>
         </div>
       </div>
+
+      ${(() => {
+        const mo = bilan.mainOeuvre;
+        if (!mo || mo.membres.length === 0) {
+          return `<p class="hint" style="margin-top:var(--s-2)">👷 Aucune équipe assignée à ce chantier — pas de coût de main d'œuvre calculé.</p>`;
+        }
+        return `
+          <div class="mo-block">
+            <div class="mo-block__head">
+              <strong>👷 Main d'œuvre — ${mo.membres.length} personne(s)</strong>
+              <span class="mo-heures">
+                ${mo.heuresParPersonne} h/personne
+                ${mo.auto ? '<span class="hint">(calcul auto)</span>' : '<span class="badge badge--warning">ajusté</span>'}
+                <button class="btn-icon" id="editHeuresBtn" title="Ajuster les heures">✎</button>
+              </span>
+            </div>
+            <div class="mo-list">
+              ${mo.membres.map(m => `
+                <div class="mo-row">
+                  <span class="mo-row__nom">${Helpers.esc(m.nom)}</span>
+                  <span class="mo-row__taux hint">${m.tauxHoraire > 0 ? Format.euro(m.tauxHoraire) + '/h' : '⚠️ taux non défini'}</span>
+                  <span class="mo-row__heures mono">${m.heures} h</span>
+                  <span class="mo-row__cout mono"><strong>${Format.euro(m.cout)}</strong></span>
+                </div>
+              `).join('')}
+            </div>
+            <p class="hint" style="margin:var(--s-2) 0 0">
+              Calcul basé sur les horaires : 8 h/jour (lun-jeu), 7 h le vendredi, week-ends exclus.
+            </p>
+          </div>
+        `;
+      })()}
 
       <div class="depenses-manuelles">
         <div class="depenses-manuelles__head">
@@ -794,6 +830,47 @@ const Chantiers = {
     const $ = (sel) => document.querySelector(sel);
     $('#addDepenseBtn')?.addEventListener('click', () => this._openDepenseForm(chantierId));
     $('#addFournitureBtn')?.addEventListener('click', () => this._openFournitureForm(chantierId));
+
+    // Ajuster les heures de main d'œuvre
+    $('#editHeuresBtn')?.addEventListener('click', () => {
+      const mo = Store.getMainOeuvreChantier(chantierId);
+      Modal.open({
+        title: '👷 Ajuster les heures de main d\'œuvre',
+        size: 'small',
+        body: `
+          <p class="hint" style="margin-bottom:var(--s-2)">
+            Calcul automatique : <strong>${mo.heuresAuto} h</strong> par personne
+            (8 h/jour du lundi au jeudi, 7 h le vendredi, week-ends exclus).
+          </p>
+          <div class="form-grid">
+            <div class="form-field form-field--full">
+              <label>Heures par personne</label>
+              <input id="mo_heures" class="form-input mono" type="number" min="0" step="0.5" value="${mo.heuresParPersonne}">
+              <p class="hint" style="margin-top:4px">Laissez vide pour revenir au calcul automatique.</p>
+            </div>
+          </div>
+        `,
+        footer: `
+          <button class="btn btn--ghost" id="mo_reset">Calcul auto</button>
+          <button class="btn btn--primary" id="mo_save">Enregistrer</button>
+        `,
+        onOpen: () => {
+          document.getElementById('mo_save').addEventListener('click', () => {
+            const v = document.getElementById('mo_heures').value;
+            Store.setHeuresChantier(chantierId, v === '' ? null : v);
+            Toast.success('Heures mises à jour');
+            Modal.close();
+            this._refreshDepenses(chantierId);
+          });
+          document.getElementById('mo_reset').addEventListener('click', () => {
+            Store.setHeuresChantier(chantierId, null);
+            Toast.success('Retour au calcul automatique');
+            Modal.close();
+            this._refreshDepenses(chantierId);
+          });
+        }
+      });
+    });
 
     // Bouton compléter les fournitures manquantes
     $('#completManquesBtn')?.addEventListener('click', () => {
