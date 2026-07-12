@@ -2816,6 +2816,55 @@ a.btn-icon:hover {
   margin-top: 2px;
 }
 
+/* ========== MAIN D'ŒUVRE (bilan chantier) ========== */
+.mo-block {
+  margin-top: var(--s-3);
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+}
+.mo-block__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-2);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--border);
+}
+.mo-heures {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.mo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mo-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 60px 90px;
+  gap: var(--s-2);
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--bg-elevated);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+}
+.mo-row__nom { font-weight: 600; }
+.mo-row__heures, .mo-row__cout { text-align: right; }
+.mo-row__cout strong { color: #f59e0b; }
+@media (max-width: 640px) {
+  .mo-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
+}
+
 /* ========== RESPONSIVE COMPLET — Mobile + Tablette + Desktop ========== */
 
 /* Tablette : 1024px et moins */
