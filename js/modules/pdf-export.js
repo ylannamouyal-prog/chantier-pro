@@ -351,9 +351,9 @@ window.PdfExport = (function () {
 
         // BILAN TOTAL (encadré)
         if (bilan.totalGeneral > 0) {
-          if (y > 250) { doc.addPage(); y = margin; }
+          if (y > 245) { doc.addPage(); y = margin; }
           const lineH = 7;
-          const boxH = 8 + lineH * 4;
+          const boxH = 8 + lineH * 5;
           doc.setFillColor(248, 250, 252);
           doc.setDrawColor(15, 23, 42);
           doc.rect(margin, y, pageWidth - 2 * margin, boxH, 'FD');
@@ -372,11 +372,16 @@ window.PdfExport = (function () {
           };
           lineItem('Fournitures estimées', bilan.totalFournitures.toFixed(2) + ' €');
           lineItem('Commandes chantier', bilan.totalCommandes.toFixed(2) + ' €');
+          const mo = bilan.mainOeuvre;
+          const moLabel = mo && mo.membres.length > 0
+            ? `Main d'oeuvre (${mo.membres.length} pers. x ${mo.heuresParPersonne} h)`
+            : "Main d'oeuvre";
+          lineItem(moLabel, (bilan.totalMainOeuvre || 0).toFixed(2) + ' €');
           lineItem('Autres dépenses', bilan.totalManuelles.toFixed(2) + ' €');
           // ligne séparation
           doc.setDrawColor(200, 205, 215);
           doc.line(margin + 4, ly - 4, pageWidth - margin - 4, ly - 4);
-          lineItem('COÛT TOTAL DU CHANTIER (HT)', bilan.totalGeneral.toFixed(2) + ' €', true);
+          lineItem('DÉBOURSÉ TOTAL DU CHANTIER (HT)', bilan.totalGeneral.toFixed(2) + ' €', true);
           y += boxH + 6;
           doc.setTextColor(15, 23, 42);
         }
