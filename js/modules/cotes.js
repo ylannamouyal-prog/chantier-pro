@@ -1044,13 +1044,21 @@ window.Cotes = (function () {
       const c = p.chantier;
       const client = Store.state.clients.find(cl => cl.id === c.clientId);
 
-      // Contact : contact principal du client + contacts marqués afficherPdf
+      // Contact : celui choisi pour ce chantier, sinon le contact principal du client
       let contactNom = '', contactTel = '', contactRole = '';
-      if (client) {
+      const ctChantier = Store.getContactChantier ? Store.getContactChantier(c.id) : null;
+      if (ctChantier) {
+        contactNom = ctChantier.nom || '';
+        contactTel = ctChantier.telephone || '';
+        contactRole = ctChantier.role || '';
+      } else if (client) {
         contactNom = client.nom || '';
         contactTel = client.telephone || '';
         contactRole = client.role || '';
       }
+
+      // Lieu (si un lieu du client est associé)
+      const lieuChantier = Store.getLieuChantier ? Store.getLieuChantier(c.id) : null;
 
       // Ce qu'il faut mesurer : catégories d'ouvrages du chantier
       const cats = Store.getCategoriesByChantier ? Store.getCategoriesByChantier(c.id) : [];
@@ -1091,6 +1099,12 @@ window.Cotes = (function () {
       doc.setTextColor(40, 40, 40);
       doc.text(`Adresse : ${p.adresse}`, margin + 11, y);
       y += 5;
+
+      // Nom du lieu (école, mairie...)
+      if (lieuChantier && lieuChantier.nom) {
+        doc.text(`Lieu : ${lieuChantier.nom}`, margin + 11, y);
+        y += 5;
+      }
 
       // Contact / demandeur
       if (contactNom || contactTel) {
