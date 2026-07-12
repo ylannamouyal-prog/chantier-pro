@@ -215,6 +215,23 @@ const Chantiers = {
 
       <div class="form-group--row">
         <div class="form-group">
+          <label class="form-label">Lieu du client</label>
+          <select class="form-select" id="f-lieu">
+            <option value="">— Aucun / adresse libre —</option>
+          </select>
+          <p class="hint" style="margin-top:4px">Sélectionnez un lieu (école, mairie...) : l'adresse se remplit automatiquement.</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contact sur place</label>
+          <select class="form-select" id="f-contact">
+            <option value="">— Aucun —</option>
+          </select>
+          <p class="hint" style="margin-top:4px">Interlocuteur pour ce chantier.</p>
+        </div>
+      </div>
+
+      <div class="form-group--row">
+        <div class="form-group">
           <label class="form-label">Ville</label>
           <input class="form-input" id="f-ville" value="${Helpers.esc(data.ville || '')}" placeholder="Paris" />
         </div>
@@ -303,6 +320,8 @@ const Chantiers = {
       const formData = {
         titre:        $('#f-titre').value.trim(),
         clientId:     $('#f-client').value || null,
+        lieuId:       $('#f-lieu')?.value || null,
+        contactId:    $('#f-contact')?.value || null,
         ville:        $('#f-ville').value.trim(),
         adresse:      $('#f-adresse').value.trim(),
         conducteurId: $('#f-conducteur').value || null,
@@ -390,6 +409,73 @@ const Chantiers = {
 
     // Initialiser le picker équipe drag & drop
     this._initEquipePicker(pickerState, chantier ? chantier.id : null);
+
+    // Initialiser les sélecteurs Lieu / Contact selon le client
+    this._initLieuContactSelects(data);
+  },
+
+  /** Remplit les listes Lieu et Contact selon le client choisi */
+  _initLieuContactSelects(data) {
+    const selClient = document.getElementById('f-client');
+    const selLieu = document.getElementById('f-lieu');
+    const selContact = document.getElementById('f-contact');
+    const inVille = document.getElementById('f-ville');
+    const inAdresse = document.getElementById('f-adresse');
+    if (!selClient || !selLieu || !selContact) return;
+
+    const remplirListes = (clientId, preserveSelection = false) => {
+      const lieuActuel = preserveSelection ? (data.lieuId || '') : '';
+      const contactActuel = preserveSelection ? (data.contactId || '') : '';
+
+      // --- Lieux ---
+      const lieux = clientId && Store.getLieuxByClient ? Store.getLieuxByClient(clientId) : [];
+      selLieu.innerHTML = `<option value="">— Aucun / adresse libre —</option>` +
+        lieux.map(l => {
+          const adr = [l.adresse, l.ville].filter(Boolean).join(', ');
+          return `<option value="${l.id}" ${lieuActuel === l.id ? 'selected' : ''}>${Helpers.esc(l.nom)}${adr ? ' — ' + Helpers.esc(adr) : ''}</option>`;
+        }).join('');
+
+      // --- Contacts (contact principal + contacts secondaires) ---
+      const client = clientId ? Store.state.clients.find(c => c.id === clientId) : null;
+      const contacts = [];
+      if (client) {
+        if (client.nom) {
+          contacts.push({
+            id: '__principal__',
+            nom: client.nom,
+            role: client.role || 'Contact principal',
+            telephone: client.telephone || ''
+          });
+        }
+        (client.contacts || []).forEach(ct => contacts.push(ct));
+      }
+      selContact.innerHTML = `<option value="">— Aucun —</option>` +
+        contacts.map(ct => {
+          const label = `${ct.nom}${ct.role ? ' (' + ct.role + ')' : ''}`;
+          return `<option value="${ct.id}" ${contactActuel === ct.id ? 'selected' : ''}>${Helpers.esc(label)}</option>`;
+        }).join('');
+    };
+
+    // Remplissage initial (en préservant la sélection si on édite)
+    remplirListes(selClient.value, true);
+
+    // Au changement de client → recharger les listes
+    selClient.addEventListener('change', () => {
+      remplirListes(selClient.value, false);
+    });
+
+    // Au choix d'un lieu → remplir automatiquement l'adresse et la ville
+    selLieu.addEventListener('change', () => {
+      const lieuId = selLieu.value;
+      if (!lieuId) return;
+      const lieux = Store.getLieuxByClient(selClient.value) || [];
+      const lieu = lieux.find(l => l.id === lieuId);
+      if (lieu) {
+        if (inAdresse) inAdresse.value = lieu.adresse || '';
+        if (inVille) inVille.value = lieu.ville || '';
+        Toast.info(`Adresse remplie : ${lieu.nom}`);
+      }
+    });
   },
 
   /** Initialise le picker drag & drop d'équipe dans le formulaire chantier */
@@ -1104,6 +1190,16 @@ const Chantiers = {
         <div class="detail-section__title">Informations</div>
         <div class="detail-grid">
           <div class="detail-item"><span class="detail-label">Client</span><span class="detail-value">${Helpers.esc(client?.nom || '—')}</span></div>
+          ${(() => {
+            const lieu = Store.getLieuChantier ? Store.getLieuChantier(c.id) : null;
+            return lieu ? `<div class="detail-item"><span class="detail-label">Lieu</span><span class="detail-value">📍 ${Helpers.esc(lieu.nom)}</span></div>` : '';
+          })()}
+          ${(() => {
+            const ct = Store.getContactChantier ? Store.getContactChantier(c.id) : null;
+            if (!ct) return '';
+            const info = [ct.nom, ct.role ? '(' + ct.role + ')' : '', ct.telephone ? '· ' + Format.phone(ct.telephone) : ''].filter(Boolean).join(' ');
+            return `<div class="detail-item"><span class="detail-label">Contact</span><span class="detail-value">👤 ${Helpers.esc(info)}</span></div>`;
+          })()}
           <div class="detail-item"><span class="detail-label">Ville · Adresse</span><span class="detail-value">${Helpers.esc(c.ville || '—')}${c.adresse ? ' · ' + Helpers.esc(c.adresse) : ''}</span></div>
           <div class="detail-item"><span class="detail-label">Conducteur</span><span class="detail-value">${cond ? `${UI.colorDot(cond.couleur)} ${Helpers.esc(cond.nom)}` : '—'}</span></div>
           <div class="detail-item"><span class="detail-label">Équipe</span><span class="detail-value">${eq ? `${UI.colorDot(eq.couleur)} ${Helpers.esc(eq.nom)}` : '—'}</span></div>
