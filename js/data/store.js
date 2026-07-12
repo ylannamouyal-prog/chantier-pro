@@ -1831,6 +1831,7 @@ const Store = {
       couleur: '#3b82f6',
       telephone: '',
       email: '',
+      tauxHoraire: 0,        // coût horaire de main d'œuvre (€/h)
       equipeIds: [],
       actif: true,
       createdAt: new Date().toISOString(),
