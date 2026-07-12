@@ -205,6 +205,10 @@ window.Personnel = (function () {
             <label>Email</label>
             <input id="f_email" class="form-input" type="email" value="${Helpers.esc(p.email || '')}" placeholder="marc.dupont@exemple.fr">
           </div>
+          <div class="form-field">
+            <label>Taux horaire (€/h)</label>
+            <input id="f_taux" class="form-input mono" type="number" min="0" step="0.01" value="${p.tauxHoraire || ''}" placeholder="Ex: 25">
+          </div>
 
           <div class="form-field form-field--full">
             <label>Couleur (planning)</label>
@@ -262,6 +266,7 @@ window.Personnel = (function () {
             role: document.getElementById('f_role').value,
             couleur: document.getElementById('f_couleur').value,
             telephone: document.getElementById('f_telephone').value.trim(),
+            tauxHoraire: parseFloat(document.getElementById('f_taux').value) || 0,
             email: document.getElementById('f_email').value.trim(),
             equipeIds,
             actif: document.getElementById('f_actif').checked
@@ -338,6 +343,10 @@ window.Personnel = (function () {
                   <a href="mailto:${Helpers.esc(p.email)}" class="btn-icon" title="Envoyer un email">✉</a>
                 </div>
               </dd>
+            ` : ''}
+            ${p.tauxHoraire > 0 ? `
+              <dt>Taux horaire</dt>
+              <dd><strong>${Format.euro(p.tauxHoraire)}/h</strong></dd>
             ` : ''}
             ${equipes.length > 0 ? `
               <dt>Équipes</dt>
