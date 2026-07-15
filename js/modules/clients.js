@@ -370,6 +370,13 @@ window.Clients = (function () {
                     <div class="lieu-row__info">
                       <strong>${Helpers.esc(l.nom || '(Sans nom)')}</strong>
                       <span class="hint">${Helpers.esc([l.adresse, l.ville].filter(Boolean).join(', ') || 'Adresse non renseignée')}</span>
+                      ${(l.contacts && l.contacts.length > 0) ? `
+                        <div class="lieu-contacts">
+                          ${l.contacts.map(ct => `
+                            <span class="lieu-contact-badge">👤 ${Helpers.esc(ct.nom)}${ct.role ? ' (' + Helpers.esc(ct.role) + ')' : ''}${ct.telephone ? ' · ' + Helpers.esc(Format.phone(ct.telephone)) : ''}</span>
+                          `).join('')}
+                        </div>
+                      ` : ''}
                     </div>
                     <button class="btn-icon" data-edit-lieu="${l.id}" title="Modifier">✎</button>
                     <button class="btn-icon btn-icon--danger" data-del-lieu="${l.id}" title="Supprimer">🗑</button>
@@ -572,11 +579,23 @@ window.Clients = (function () {
   function _openLieuForm(clientId, lieuId = null) {
     const lieux = Store.getLieuxByClient(clientId);
     const existing = lieuId ? lieux.find(l => l.id === lieuId) : null;
-    const l = existing || { nom: '', adresse: '', ville: '' };
+    const l = existing || { nom: '', adresse: '', ville: '', contacts: [] };
+
+    // Contacts sur place de travail (copie éditable)
+    let contactsSurPlace = (l.contacts || []).map(c => ({ ...c }));
+
+    const renderContactRow = (ct, i) => `
+      <div class="lieu-contact-row" data-lc-index="${i}">
+        <input class="form-input lc-nom" placeholder="Nom (ex: Gardien)" value="${Helpers.esc(ct.nom || '')}">
+        <input class="form-input lc-role" placeholder="Rôle" value="${Helpers.esc(ct.role || '')}">
+        <input class="form-input lc-tel" placeholder="Téléphone" value="${Helpers.esc(ct.telephone || '')}">
+        <button type="button" class="btn-icon btn-icon--danger lc-del" title="Supprimer">🗑</button>
+      </div>
+    `;
 
     Modal.open({
       title: existing ? 'Modifier le lieu' : '📍 Nouveau lieu',
-      size: 'small',
+      size: 'medium',
       body: `
         <div class="form-grid">
           <div class="form-field form-field--full">
@@ -591,6 +610,15 @@ window.Clients = (function () {
             <label>Ville</label>
             <input id="lieu_ville" class="form-input" value="${Helpers.esc(l.ville)}" placeholder="Ex: Pantin">
           </div>
+
+          <div class="form-field form-field--full">
+            <label>👤 Contacts sur place (gardien, responsable...)</label>
+            <p class="hint" style="margin:0 0 var(--s-2)">La personne présente sur le site, différente de celle qui fait la demande.</p>
+            <div id="lieuContactsList">
+              ${contactsSurPlace.map((ct, i) => renderContactRow(ct, i)).join('')}
+            </div>
+            <button type="button" class="btn btn--ghost btn--sm" id="addLieuContact" style="margin-top:var(--s-2)">+ Ajouter un contact sur place</button>
+          </div>
         </div>
       `,
       footer: `
@@ -598,11 +626,45 @@ window.Clients = (function () {
         <button class="btn btn--primary" id="lieuSave">${existing ? 'Mettre à jour' : 'Ajouter'}</button>
       `,
       onOpen: () => {
+        const list = document.getElementById('lieuContactsList');
+
+        const bindDelButtons = () => {
+          list.querySelectorAll('.lc-del').forEach(btn => {
+            btn.onclick = () => {
+              btn.closest('.lieu-contact-row').remove();
+            };
+          });
+        };
+        bindDelButtons();
+
+        document.getElementById('addLieuContact').addEventListener('click', () => {
+          const idx = list.querySelectorAll('.lieu-contact-row').length;
+          const div = document.createElement('div');
+          div.innerHTML = renderContactRow({ nom: '', role: '', telephone: '' }, idx);
+          list.appendChild(div.firstElementChild);
+          bindDelButtons();
+        });
+
         document.getElementById('lieuSave').addEventListener('click', () => {
+          // Récupère les contacts saisis
+          const contacts = [];
+          list.querySelectorAll('.lieu-contact-row').forEach(row => {
+            const nom = row.querySelector('.lc-nom').value.trim();
+            const role = row.querySelector('.lc-role').value.trim();
+            const tel = row.querySelector('.lc-tel').value.trim();
+            if (nom || tel) {
+              contacts.push({
+                id: Helpers.uid('lc_'),
+                nom, role, telephone: tel
+              });
+            }
+          });
+
           const data = {
             nom: document.getElementById('lieu_nom').value.trim(),
             adresse: document.getElementById('lieu_adresse').value.trim(),
-            ville: document.getElementById('lieu_ville').value.trim()
+            ville: document.getElementById('lieu_ville').value.trim(),
+            contacts
           };
           if (!data.nom) { Toast.warning('Le nom du lieu est requis'); return; }
           if (existing) {
