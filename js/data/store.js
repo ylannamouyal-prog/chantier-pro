@@ -624,6 +624,7 @@ const Store = {
       nom: '',
       adresse: '',
       ville: '',
+      contacts: [],      // contacts sur place : [{id, nom, role, telephone}]
       ...lieuData
     };
     this.commit('client:addLieu', s => {
