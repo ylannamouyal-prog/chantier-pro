@@ -1113,6 +1113,15 @@ window.Cotes = (function () {
         y += 5;
       }
 
+      // Contacts sur place (gardien, responsable...)
+      if (lieuChantier && lieuChantier.contacts && lieuChantier.contacts.length > 0) {
+        lieuChantier.contacts.forEach(ct => {
+          const surPlaceStr = `Sur place : ${ct.nom || ''}${ct.role ? ' (' + ct.role + ')' : ''}${ct.telephone ? '  -  Tel : ' + Format.phone(ct.telephone) : ''}`;
+          doc.text(surPlaceStr, margin + 11, y);
+          y += 5;
+        });
+      }
+
       // À mesurer
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(59, 130, 246);
