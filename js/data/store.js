@@ -22,6 +22,7 @@ const Store = {
     categoriesFournisseurs: [], // liste gérable de catégories fournisseurs
     commandes:    [],       // bons de commande fournisseurs
     articlesSpecifiques: [], // articles sur-mesure par chantier (vitrage, store...) avec cycle de vie
+    tachesLPS:    [],       // Last Planner System : engagements hebdomadaires
     rdvs:         [],       // rendez-vous (visites, métrés, etc.)
     modeles:      [],       // modèles de chantier (bibliothèque de fournitures par type)
     equipes:      [],       // équipes avec couleur
@@ -386,6 +387,227 @@ const Store = {
       const c = s.chantiers.find(x => x.id === chantierId);
       if (c) c.heuresManuelles = (heures === null || heures === '') ? null : parseFloat(heures);
     });
+  },
+
+  // ============================================================
+  // LAST PLANNER SYSTEM (LPS)
+  // Engagements hebdomadaires, levée de contraintes, PPC
+  // ============================================================
+
+  /** Contraintes à lever avant d'engager une tâche */
+  CONTRAINTES_LPS: [
+    { id: 'materiel', label: 'Matériel disponible en stock', icon: '📦', auto: true },
+    { id: 'equipe',   label: 'Équipe disponible',            icon: '👷', auto: true },
+    { id: 'acces',    label: 'Accès chantier / client confirmé', icon: '🔑', auto: false },
+    { id: 'plans',    label: 'Plans / documents validés',    icon: '📐', auto: false },
+    { id: 'meteo',    label: 'Météo compatible',             icon: '🌤️', auto: false }
+  ],
+
+  /** Causes racines de non-réalisation */
+  CAUSES_LPS: [
+    { id: 'fournisseur', label: 'Retard fournisseur',          couleur: '#ef4444' },
+    { id: 'effectif',    label: "Manque d'effectif",           couleur: '#f59e0b' },
+    { id: 'meteo',       label: 'Météo',                       couleur: '#06b6d4' },
+    { id: 'client',      label: 'Client absent',               couleur: '#8b5cf6' },
+    { id: 'technique',   label: 'Problème technique',          couleur: '#ec4899' },
+    { id: 'precedente',  label: 'Tâche précédente non finie',  couleur: '#f97316' },
+    { id: 'autre',       label: 'Autre',                       couleur: '#64748b' }
+  ],
+
+  /** Clé de semaine ISO à partir d'une date : "2026-W30" */
+  getSemaineKey(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    // Jeudi de la semaine courante détermine l'année ISO
+    d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+    const annee = d.getFullYear();
+    const debutAnnee = new Date(annee, 0, 4);
+    const semaine = 1 + Math.round(
+      ((d - debutAnnee) / 86400000 - 3 + ((debutAnnee.getDay() + 6) % 7)) / 7
+    );
+    return `${annee}-W${String(semaine).padStart(2, '0')}`;
+  },
+
+  /** Retourne le lundi et le dimanche d'une clé de semaine */
+  getSemaineDates(key) {
+    const [annee, wPart] = key.split('-W');
+    const semaine = parseInt(wPart, 10);
+    // 4 janvier est toujours dans la semaine 1 (norme ISO)
+    const jan4 = new Date(parseInt(annee, 10), 0, 4);
+    const lundiSem1 = new Date(jan4);
+    lundiSem1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
+    const lundi = new Date(lundiSem1);
+    lundi.setDate(lundiSem1.getDate() + (semaine - 1) * 7);
+    const dimanche = new Date(lundi);
+    dimanche.setDate(lundi.getDate() + 6);
+    return { lundi, dimanche };
+  },
+
+  /** Décale une clé de semaine de N semaines (positif ou négatif) */
+  decalerSemaine(key, delta) {
+    const { lundi } = this.getSemaineDates(key);
+    lundi.setDate(lundi.getDate() + delta * 7);
+    return this.getSemaineKey(lundi);
+  },
+
+  addTacheLPS(data) {
+    const tache = {
+      id: Helpers.uid('lps_'),
+      chantierId: null,
+      equipeId: null,
+      description: '',
+      semaine: this.getSemaineKey(new Date()),
+      jours: [],                 // [1..5] lundi=1
+      statut: 'en-attente',      // en-attente | engagee | terminee | non-realisee
+      contraintes: {},           // { materiel: true, equipe: false, ... }
+      cause: null,               // { code, detail } si non réalisée
+      createdAt: new Date().toISOString(),
+      ...data
+    };
+    this.commit('lps:add', s => {
+      if (!s.tachesLPS) s.tachesLPS = [];
+      s.tachesLPS.push(tache);
+    });
+    return tache;
+  },
+
+  updateTacheLPS(id, patch) {
+    this.commit('lps:update', s => {
+      const t = (s.tachesLPS || []).find(x => x.id === id);
+      if (t) Object.assign(t, patch);
+    });
+  },
+
+  deleteTacheLPS(id) {
+    this.commit('lps:delete', s => {
+      s.tachesLPS = (s.tachesLPS || []).filter(t => t.id !== id);
+    });
+  },
+
+  getTachesLPSBySemaine(key) {
+    return (this.state.tachesLPS || []).filter(t => t.semaine === key);
+  },
+
+  /**
+   * Vérifie automatiquement les contraintes "auto" d'une tâche.
+   * Retourne { materiel: bool, equipe: bool, details: {...} }
+   */
+  verifierContraintesAuto(tache) {
+    const result = { materiel: true, equipe: true, details: {} };
+
+    // --- Matériel : les besoins du chantier sont-ils couverts par le stock ? ---
+    if (tache.chantierId) {
+      const besoins = this.getBesoinsFournitures ? this.getBesoinsFournitures(tache.chantierId) : [];
+      const manquants = [];
+      besoins.forEach(b => {
+        const dispo = this.getStockTotal(b.fournitureId).total;
+        if (dispo < b.quantite) {
+          manquants.push(`${b.designation} (manque ${Math.ceil((b.quantite - dispo) * 100) / 100})`);
+        }
+      });
+      if (manquants.length > 0) {
+        result.materiel = false;
+        result.details.materiel = manquants.join(', ');
+      }
+    }
+
+    // --- Équipe : les membres sont-ils disponibles sur la semaine ? ---
+    if (tache.equipeId && tache.semaine) {
+      const { lundi, dimanche } = this.getSemaineDates(tache.semaine);
+      const eq = (this.state.equipes || []).find(e => e.id === tache.equipeId);
+      if (eq) {
+        let membresIds = [...(eq.membresIds || [])];
+        if (eq.chefId) membresIds.push(eq.chefId);
+        const absents = [];
+        membresIds.forEach(pid => {
+          const abs = (this.state.absences || []).filter(a => {
+            if (a.personnelId !== pid) return false;
+            const ad = new Date(a.dateDebut); ad.setHours(0, 0, 0, 0);
+            const af = new Date(a.dateFin); af.setHours(23, 59, 59, 999);
+            return ad <= dimanche && af >= lundi;
+          });
+          if (abs.length > 0) {
+            const p = (this.state.personnel || []).find(x => x.id === pid);
+            const nom = p ? ([p.prenom, p.nom].filter(Boolean).join(' ') || p.nom) : '?';
+            const type = this.getTypeAbsence(abs[0].typeId);
+            absents.push(`${nom} (${type?.label || 'absent'})`);
+          }
+        });
+        if (absents.length > 0) {
+          result.equipe = false;
+          result.details.equipe = absents.join(', ');
+        }
+      }
+    }
+
+    return result;
+  },
+
+  /** Liste les contraintes bloquantes d'une tâche (auto + manuelles) */
+  getContraintesBloquantes(tache) {
+    const auto = this.verifierContraintesAuto(tache);
+    const bloquantes = [];
+    this.CONTRAINTES_LPS.forEach(c => {
+      if (c.auto) {
+        if (auto[c.id] === false) {
+          bloquantes.push({ ...c, detail: auto.details[c.id] || '' });
+        }
+      } else {
+        if (!(tache.contraintes && tache.contraintes[c.id])) {
+          bloquantes.push({ ...c, detail: '' });
+        }
+      }
+    });
+    return bloquantes;
+  },
+
+  /** PPC d'une semaine : tâches terminées / tâches engagées × 100 */
+  calculerPPC(key) {
+    const taches = this.getTachesLPSBySemaine(key);
+    // "Engagées" = tout ce qui a été promis : engagée + terminée + non réalisée
+    const engagees = taches.filter(t => ['engagee', 'terminee', 'non-realisee'].includes(t.statut));
+    const terminees = taches.filter(t => t.statut === 'terminee');
+    const ppc = engagees.length > 0 ? Math.round((terminees.length / engagees.length) * 100) : null;
+    return {
+      semaine: key,
+      totalTaches: taches.length,
+      engagees: engagees.length,
+      terminees: terminees.length,
+      nonRealisees: taches.filter(t => t.statut === 'non-realisee').length,
+      enAttente: taches.filter(t => t.statut === 'en-attente').length,
+      ppc
+    };
+  },
+
+  /** Historique du PPC sur les N dernières semaines (de la plus ancienne à la plus récente) */
+  getPPCHistorique(nbSemaines = 8, semaineRef = null) {
+    const ref = semaineRef || this.getSemaineKey(new Date());
+    const result = [];
+    for (let i = nbSemaines - 1; i >= 0; i--) {
+      const key = this.decalerSemaine(ref, -i);
+      result.push(this.calculerPPC(key));
+    }
+    return result;
+  },
+
+  /** Répartition des causes de non-réalisation */
+  getCausesStatsLPS(semaineRef = null, nbSemaines = 12) {
+    const ref = semaineRef || this.getSemaineKey(new Date());
+    const keys = [];
+    for (let i = 0; i < nbSemaines; i++) keys.push(this.decalerSemaine(ref, -i));
+
+    const stats = {};
+    (this.state.tachesLPS || []).forEach(t => {
+      if (t.statut !== 'non-realisee' || !t.cause) return;
+      if (!keys.includes(t.semaine)) return;
+      const code = t.cause.code || 'autre';
+      if (!stats[code]) {
+        const def = this.CAUSES_LPS.find(c => c.id === code) || { label: code, couleur: '#64748b' };
+        stats[code] = { code, label: def.label, couleur: def.couleur, count: 0 };
+      }
+      stats[code].count++;
+    });
+    return Object.values(stats).sort((a, b) => b.count - a.count);
   },
 
   getBilanChantier(chantierId) {
