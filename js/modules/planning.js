@@ -124,7 +124,67 @@ const Planning = {
     });
   },
 
+  /** Mode d'affichage : 'planning' ou 'lps' (mémorisé) */
+  _getMode() {
+    return localStorage.getItem('planning_mode') === 'lps' ? 'lps' : 'planning';
+  },
+  _setMode(mode) {
+    localStorage.setItem('planning_mode', mode);
+  },
+
+  /** Barre d'onglets Planning / LPS */
+  _renderModeSwitch(mode) {
+    const stats = Store.calculerPPC ? Store.calculerPPC(Store.getSemaineKey(new Date())) : { ppc: null };
+    return `
+      <div class="mode-switch">
+        <button class="mode-switch__btn ${mode === 'planning' ? 'is-active' : ''}" data-mode="planning">
+          📅 Planning
+        </button>
+        <button class="mode-switch__btn ${mode === 'lps' ? 'is-active' : ''}" data-mode="lps">
+          🎯 Last Planner
+          ${stats.ppc !== null ? `<span class="mode-switch__badge" style="background:${window.LPS ? LPS.couleurPPC(stats.ppc) : '#64748b'}">${stats.ppc}%</span>` : ''}
+        </button>
+      </div>
+    `;
+  },
+
+  _bindModeSwitch(container) {
+    container.querySelectorAll('.mode-switch__btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        if (mode === this._getMode()) return;
+        window.LPS?.destroy?.();
+        this._setMode(mode);
+        this.render(container);
+      });
+    });
+  },
+
   render(container) {
+    const mode = this._getMode();
+
+    // --- MODE LAST PLANNER SYSTEM ---
+    if (mode === 'lps') {
+      container.innerHTML = `
+        ${UI.viewHeader({
+          title: 'Last Planner System',
+          subtitle: 'Engagements hebdomadaires, levée de contraintes et PPC',
+          actions: ''
+        })}
+        ${this._renderModeSwitch(mode)}
+        <div id="lpsContainer"></div>
+      `;
+      this._bindModeSwitch(container);
+      const lpsEl = document.getElementById('lpsContainer');
+      if (window.LPS && lpsEl) {
+        window.LPS.render(lpsEl);
+      } else if (lpsEl) {
+        lpsEl.innerHTML = '<p class="hint">Module LPS non chargé.</p>';
+      }
+      return;
+    }
+
+    // --- MODE PLANNING CLASSIQUE ---
     this._initFilters();
     const conducteurs = Store.state.conducteurs;
     const equipes = Store.state.equipes;
@@ -152,6 +212,8 @@ const Planning = {
           <button class="btn btn--primary" id="planningNewBtn"><span class="btn-icon">+</span> Nouveau chantier</button>
         `
       })}
+
+      ${this._renderModeSwitch(mode)}
 
       <div class="planning-layout">
         <div class="planning-main">
@@ -253,6 +315,7 @@ const Planning = {
       </div>
     `;
 
+    this._bindModeSwitch(container);
     this._initCalendar();
     this._bindFilters();
 
