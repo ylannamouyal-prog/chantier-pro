@@ -46,6 +46,34 @@ const Dashboard = {
         ${UI.statCard({ label: 'Clients actifs',     value: s.clients.length, sub: `${s.chantiers.length} chantiers au total`, accent: '#3B82F6', icon: '◉' })}
         ${UI.statCard({ label: 'Alertes stock',      value: stockAlertes.length, sub: stockAlertes.length ? 'Réapprovisionnement nécessaire' : 'Stock OK', accent: stockAlertes.length ? '#EF4444' : '#10B981', icon: '▤' })}
         ${UI.statCard({ label: 'Valeur stock',       value: Format.euro(valeurStock), sub: `${s.fournitures.length} références`, accent: '#10B981', icon: '€' })}
+        ${(() => {
+          // KPI Last Planner System : PPC de la semaine en cours + tendance
+          if (!Store.calculerPPC || !Store.getSemaineKey) return '';
+          const semaine = Store.getSemaineKey(new Date());
+          const cur = Store.calculerPPC(semaine);
+          const prec = Store.calculerPPC(Store.decalerSemaine(semaine, -1));
+
+          const couleur = window.LPS ? LPS.couleurPPC(cur.ppc) : '#64748b';
+          let sub, fleche = '';
+          if (cur.ppc === null) {
+            sub = 'Aucun engagement cette semaine';
+          } else {
+            if (prec.ppc !== null) {
+              const diff = cur.ppc - prec.ppc;
+              if (diff > 0) fleche = ` ↑ +${diff} pts`;
+              else if (diff < 0) fleche = ` ↓ ${diff} pts`;
+              else fleche = ' → stable';
+            }
+            sub = `${cur.terminees}/${cur.engagees} promesses tenues${fleche}`;
+          }
+          return UI.statCard({
+            label: 'PPC (Last Planner)',
+            value: cur.ppc === null ? '—' : cur.ppc + ' %',
+            sub,
+            accent: couleur,
+            icon: '🎯'
+          });
+        })()}
       </div>
 
       <div class="dashboard-row">
