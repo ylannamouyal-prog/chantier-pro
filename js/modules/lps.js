@@ -50,6 +50,9 @@ window.LPS = (function () {
   function render(container) {
     if (!semaineCourante) semaineCourante = Store.getSemaineKey(new Date());
 
+    // Synchronise automatiquement les chantiers planifiables de la semaine
+    if (Store.syncLPSFromChantiers) Store.syncLPSFromChantiers(semaineCourante);
+
     const taches = Store.getTachesLPSBySemaine(semaineCourante);
     const stats = Store.calculerPPC(semaineCourante);
     const semaineActuelle = Store.getSemaineKey(new Date());
@@ -97,12 +100,15 @@ window.LPS = (function () {
 
         <!-- Liste des engagements -->
         <div class="lps-section">
-          <h3 class="lps-section__title">📋 Engagements de la semaine</h3>
+          <div class="lps-section__head">
+            <h3 class="lps-section__title">📋 Engagements de la semaine</h3>
+            <span class="hint">🔄 Les chantiers planifiables (commandés, prévus, en cours) sont ajoutés automatiquement.</span>
+          </div>
           ${taches.length === 0 ? `
             <div class="lps-empty">
               <span class="lps-empty__icon">📋</span>
               <p><strong>Aucun engagement cette semaine</strong></p>
-              <p class="hint">Ajoutez les tâches que vos équipes s'engagent à réaliser, après avoir levé les contraintes.</p>
+              <p class="hint">Aucun chantier planifiable n'est actif cette semaine. Les chantiers commandés, prévus ou en cours apparaîtront ici automatiquement. Vous pouvez aussi ajouter une tâche manuellement.</p>
               <button class="btn btn--primary" id="lpsAddTache2">+ Nouvel engagement</button>
             </div>
           ` : `
@@ -148,6 +154,7 @@ window.LPS = (function () {
           <div class="lps-tache__title">
             <strong>${Helpers.esc(t.description || '(Sans description)')}</strong>
             <span class="lps-badge ${st.cls}">${st.icon} ${st.label}</span>
+            ${t.source === 'auto' ? '<span class="lps-badge lps-badge--auto" title="Généré automatiquement depuis le chantier">🔄 auto</span>' : ''}
           </div>
           <div class="lps-tache__actions">
             <button class="btn-icon" data-lps-edit title="Modifier">✎</button>
@@ -233,13 +240,17 @@ window.LPS = (function () {
       card.querySelector('[data-lps-edit]')?.addEventListener('click', () => openTacheForm(id, rerender));
 
       card.querySelector('[data-lps-del]')?.addEventListener('click', () => {
+        const t = (Store.state.tachesLPS || []).find(x => x.id === id);
+        const estAuto = t && t.source === 'auto';
         Modal.confirm({
-          title: 'Supprimer cet engagement ?',
-          message: 'Cette action est irréversible.',
+          title: 'Retirer cet engagement ?',
+          message: estAuto
+            ? 'Ce chantier a été ajouté automatiquement. Il ne réapparaîtra plus pour cette semaine (vous pourrez le rajouter manuellement si besoin).'
+            : 'Cette action est irréversible.',
           danger: true,
           onConfirm: () => {
             Store.deleteTacheLPS(id);
-            Toast.success('Engagement supprimé');
+            Toast.success('Engagement retiré');
             rerender();
           }
         });
