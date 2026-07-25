@@ -71,7 +71,6 @@ window.LPS = (function () {
             <button class="btn btn--ghost btn--sm" id="lpsNext">Semaine suiv. ›</button>
             ${semaineCourante !== semaineActuelle ? '<button class="btn btn--ghost btn--sm" id="lpsToday">Aujourd\'hui</button>' : ''}
           </div>
-          <button class="btn btn--primary" id="lpsAddTache">+ Nouvel engagement</button>
         </div>
 
         <!-- KPI de la semaine -->
@@ -108,8 +107,7 @@ window.LPS = (function () {
             <div class="lps-empty">
               <span class="lps-empty__icon">📋</span>
               <p><strong>Aucun engagement cette semaine</strong></p>
-              <p class="hint">Aucun chantier planifiable n'est actif cette semaine. Les chantiers commandés, prévus ou en cours apparaîtront ici automatiquement. Vous pouvez aussi ajouter une tâche manuellement.</p>
-              <button class="btn btn--primary" id="lpsAddTache2">+ Nouvel engagement</button>
+              <p class="hint">Aucun chantier planifiable n'est actif cette semaine. Les chantiers commandés, prévus ou en cours apparaîtront ici automatiquement selon leurs dates.</p>
             </div>
           ` : `
             <div class="lps-taches">
@@ -231,8 +229,6 @@ window.LPS = (function () {
       semaineCourante = Store.getSemaineKey(new Date());
       rerender();
     });
-    document.getElementById('lpsAddTache')?.addEventListener('click', () => openTacheForm(null, rerender));
-    document.getElementById('lpsAddTache2')?.addEventListener('click', () => openTacheForm(null, rerender));
 
     container.querySelectorAll('[data-lps-id]').forEach(card => {
       const id = card.dataset.lpsId;
