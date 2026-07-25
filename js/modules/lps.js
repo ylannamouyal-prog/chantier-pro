@@ -370,7 +370,22 @@ window.LPS = (function () {
   function openChecklist(tacheId, onDone) {
     const t = (Store.state.tachesLPS || []).find(x => x.id === tacheId);
     if (!t) return;
-    const auto = Store.verifierContraintesAuto(t);
+
+    const renderList = () => {
+      const contraintes = Store.getContraintesLPS();
+      return contraintes.map(c => {
+        const coche = !!(t.contraintes && t.contraintes[c.id]);
+        return `
+          <div class="lps-check-row lps-check-row--manuel ${coche ? 'is-ok' : ''}" data-contr-row="${c.id}">
+            <input type="checkbox" class="lps-contrainte-chk" data-contrainte="${c.id}" ${coche ? 'checked' : ''}>
+            <div class="lps-check-info">
+              <strong>${c.icon || '✔️'} ${Helpers.esc(c.label)}</strong>
+            </div>
+            <button class="btn-icon btn-icon--danger lps-del-contr" data-del-contr="${c.id}" title="Supprimer cette contrainte">🗑</button>
+          </div>
+        `;
+      }).join('');
+    };
 
     Modal.open({
       title: '📋 Levée de contraintes',
@@ -378,47 +393,72 @@ window.LPS = (function () {
       body: `
         <p class="hint" style="margin-bottom:var(--s-3)">
           <strong>${Helpers.esc(t.description)}</strong><br>
-          Toutes les contraintes doivent être levées avant d'engager la tâche.
+          Cochez chaque contrainte levée. Toutes doivent être cochées pour engager la tâche.
         </p>
-        <div class="lps-checklist">
-          ${Store.CONTRAINTES_LPS.map(c => {
-            if (c.auto) {
-              const ok = auto[c.id] !== false;
-              const detail = auto.details[c.id];
-              return `
-                <div class="lps-check-row ${ok ? 'is-ok' : 'is-ko'}">
-                  <span class="lps-check-icon">${ok ? '✅' : '⚠️'}</span>
-                  <div class="lps-check-info">
-                    <strong>${c.icon} ${Helpers.esc(c.label)}</strong>
-                    <span class="hint">${ok ? 'Vérifié automatiquement — OK' : Helpers.esc(detail || 'Problème détecté')}</span>
-                  </div>
-                  <span class="badge ${ok ? 'badge--success' : 'badge--danger'}">${ok ? 'Levée' : 'Bloquante'}</span>
-                </div>
-              `;
-            }
-            const coche = !!(t.contraintes && t.contraintes[c.id]);
-            return `
-              <label class="lps-check-row lps-check-row--manuel ${coche ? 'is-ok' : ''}">
-                <input type="checkbox" class="lps-contrainte-chk" data-contrainte="${c.id}" ${coche ? 'checked' : ''}>
-                <div class="lps-check-info">
-                  <strong>${c.icon} ${Helpers.esc(c.label)}</strong>
-                  <span class="hint">À confirmer manuellement</span>
-                </div>
-              </label>
-            `;
-          }).join('')}
+        <div class="lps-checklist" id="lpsChecklist">
+          ${renderList()}
         </div>
+        <div class="lps-add-contrainte">
+          <input id="lps_new_contrainte" class="form-input" placeholder="Ajouter une contrainte (ex: Nacelle réservée)">
+          <button class="btn btn--ghost btn--sm" id="lps_add_contrainte_btn">+ Ajouter</button>
+        </div>
+        <p class="hint" style="margin-top:6px">Les contraintes sont communes à tous les engagements. Décochées au départ.</p>
       `,
       footer: `
         <button class="btn btn--ghost" onclick="Modal.close()">Fermer</button>
         <button class="btn btn--primary" id="lpsCheckSave">Enregistrer</button>
       `,
       onOpen: () => {
-        document.getElementById('lpsCheckSave').addEventListener('click', () => {
-          const contraintes = { ...(t.contraintes || {}) };
-          document.querySelectorAll('.lps-contrainte-chk').forEach(chk => {
-            contraintes[chk.dataset.contrainte] = chk.checked;
+        const listEl = document.getElementById('lpsChecklist');
+
+        // Sauvegarde l'état actuel des cases (avant re-render)
+        const captureEtat = () => {
+          const etat = { ...(t.contraintes || {}) };
+          listEl.querySelectorAll('.lps-contrainte-chk').forEach(chk => {
+            etat[chk.dataset.contrainte] = chk.checked;
           });
+          return etat;
+        };
+
+        const bindRows = () => {
+          // Style au clic sur checkbox
+          listEl.querySelectorAll('.lps-contrainte-chk').forEach(chk => {
+            chk.onchange = () => {
+              chk.closest('[data-contr-row]').classList.toggle('is-ok', chk.checked);
+            };
+          });
+          // Supprimer une contrainte
+          listEl.querySelectorAll('.lps-del-contr').forEach(btn => {
+            btn.onclick = () => {
+              const etat = captureEtat();
+              Store.deleteContrainteLPS(btn.dataset.delContr);
+              // Sauvegarde l'état des cases restantes
+              Store.updateTacheLPS(tacheId, { contraintes: etat });
+              listEl.innerHTML = renderList();
+              bindRows();
+              Toast.success('Contrainte supprimée');
+            };
+          });
+        };
+        bindRows();
+
+        // Ajouter une contrainte
+        document.getElementById('lps_add_contrainte_btn').addEventListener('click', () => {
+          const input = document.getElementById('lps_new_contrainte');
+          const label = input.value.trim();
+          if (!label) { Toast.warning('Saisissez un nom de contrainte'); return; }
+          const etat = captureEtat();
+          Store.addContrainteLPS(label);
+          Store.updateTacheLPS(tacheId, { contraintes: etat });
+          input.value = '';
+          listEl.innerHTML = renderList();
+          bindRows();
+          Toast.success('Contrainte ajoutée');
+        });
+
+        // Enregistrer
+        document.getElementById('lpsCheckSave').addEventListener('click', () => {
+          const contraintes = captureEtat();
           Store.updateTacheLPS(tacheId, { contraintes });
 
           const maj = (Store.state.tachesLPS || []).find(x => x.id === tacheId);
@@ -426,7 +466,7 @@ window.LPS = (function () {
           if (reste.length === 0) {
             Toast.success('Toutes les contraintes sont levées ✅');
           } else {
-            Toast.info(`${reste.length} contrainte(s) encore bloquante(s)`);
+            Toast.info(`${reste.length} contrainte(s) encore à lever`);
           }
           Modal.close();
           onDone();
