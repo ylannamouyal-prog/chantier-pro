@@ -71,6 +71,7 @@ window.LPS = (function () {
             <button class="btn btn--ghost btn--sm" id="lpsNext">Semaine suiv. ›</button>
             ${semaineCourante !== semaineActuelle ? '<button class="btn btn--ghost btn--sm" id="lpsToday">Aujourd\'hui</button>' : ''}
           </div>
+          <button class="btn btn--ghost btn--sm" id="lpsExportPdf">📄 Exporter PDF</button>
         </div>
 
         <!-- KPI de la semaine -->
@@ -228,6 +229,13 @@ window.LPS = (function () {
     document.getElementById('lpsToday')?.addEventListener('click', () => {
       semaineCourante = Store.getSemaineKey(new Date());
       rerender();
+    });
+    document.getElementById('lpsExportPdf')?.addEventListener('click', () => {
+      if (window.PdfExport && typeof PdfExport.lps === 'function') {
+        PdfExport.lps(semaineCourante);
+      } else {
+        Toast.error('Export PDF indisponible');
+      }
     });
 
     container.querySelectorAll('[data-lps-id]').forEach(card => {
