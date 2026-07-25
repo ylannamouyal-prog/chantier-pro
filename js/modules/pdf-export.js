@@ -939,7 +939,7 @@ window.PdfExport = (function () {
     Toast.success('Liste des clients exportée en PDF');
   }
 
-  return { chantier, planning, mouvements, stockEtat, computeFournituresChantier, reservationsEngins, clients };
+  return { chantier, planning, mouvements, stockEtat, computeFournituresChantier, reservationsEngins, clients, lps };
 
   function reservationsEngins(filter = null) {
     const JsPDF = getJsPDF();
@@ -1033,5 +1033,188 @@ window.PdfExport = (function () {
 
     doc.save(`Reservations_engins_${periodeLabel.replace(/\s+/g, '_')}.pdf`);
     Toast.success('Réservations PDF générées');
+  }
+
+  // ============================================================
+  // EXPORT PDF — BILAN LAST PLANNER SYSTEM (LPS)
+  // ============================================================
+  function lps(semaine) {
+    const JsPDF = getJsPDF();
+    if (!JsPDF) { Toast.error('Bibliothèque PDF non chargée'); return; }
+
+    const key = semaine || Store.getSemaineKey(new Date());
+    const { lundi, dimanche } = Store.getSemaineDates(key);
+    const taches = Store.getTachesLPSBySemaine(key);
+    const ppc = Store.calculerPPC(key);
+    const causes = Store.getCausesStatsLPS(key, 1); // causes de CETTE semaine
+    const entreprise = Store.state.parametres?.entreprise || {};
+    const numSem = key.split('-W')[1];
+
+    // Libellés sans emoji (jsPDF ne les affiche pas correctement)
+    const STATUT_TXT = {
+      'en-attente':   'En attente',
+      'engagee':      'Engagee',
+      'terminee':     'Terminee',
+      'non-realisee': 'Non realisee'
+    };
+    const JOURS_TXT = { 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven' };
+    const CAUSE_TXT = {};
+    (Store.CAUSES_LPS || []).forEach(c => { CAUSE_TXT[c.id] = c.label; });
+
+    const doc = new JsPDF({ unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    let y = margin;
+
+    // --- Header entreprise ---
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageWidth, 35, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(entreprise.nom || 'ChantierPro', margin, 15);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    if (entreprise.adresse) doc.text(entreprise.adresse, margin, 22);
+    const contactLine = [entreprise.telephone, entreprise.email].filter(Boolean).join(' - ');
+    if (contactLine) doc.text(contactLine, margin, 28);
+    doc.setFontSize(10);
+    doc.text(`Emis le ${Format.date(new Date())}`, pageWidth - margin, 15, { align: 'right' });
+
+    y = 45;
+    doc.setTextColor(15, 23, 42);
+
+    // --- Titre ---
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('BILAN LAST PLANNER SYSTEM', margin, y);
+    y += 8;
+    doc.setFontSize(13);
+    doc.setTextColor(59, 130, 246);
+    doc.text(`Semaine ${numSem} - du ${Format.dateShort(lundi.toISOString())} au ${Format.dateShort(dimanche.toISOString())}`, margin, y);
+    y += 10;
+
+    // --- Bloc PPC (mise en avant) ---
+    const ppcVal = ppc.ppc === null ? '-' : ppc.ppc + ' %';
+    // Couleur selon le PPC
+    let ppcColor = [100, 116, 139];
+    if (ppc.ppc !== null) {
+      if (ppc.ppc >= 80) ppcColor = [16, 185, 129];
+      else if (ppc.ppc >= 60) ppcColor = [245, 158, 11];
+      else ppcColor = [239, 68, 68];
+    }
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.rect(margin, y, pageWidth - 2 * margin, 26, 'FD');
+
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PPC (Plan Percent Complete)', margin + 4, y + 7);
+    doc.setTextColor(ppcColor[0], ppcColor[1], ppcColor[2]);
+    doc.setFontSize(24);
+    doc.text(ppcVal, margin + 4, y + 20);
+
+    // Compteurs à droite
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const stats = [
+      `Engagees : ${ppc.engagees}`,
+      `Terminees : ${ppc.terminees}`,
+      `Non realisees : ${ppc.nonRealisees}`,
+      `En attente : ${ppc.enAttente}`
+    ];
+    let ys = y + 6;
+    stats.forEach(s => { doc.text(s, pageWidth / 2 + 10, ys); ys += 5; });
+    y += 32;
+
+    // --- Tableau des engagements ---
+    if (taches.length > 0 && doc.autoTable) {
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(100, 116, 139);
+      doc.text('ENGAGEMENTS DE LA SEMAINE', margin, y);
+      y += 2;
+
+      doc.autoTable({
+        startY: y + 2,
+        head: [['Engagement', 'Equipe', 'Jours', 'Statut', 'Cause si non realise']],
+        body: taches.map(t => {
+          const equipe = (Store.state.equipes || []).find(e => e.id === t.equipeId);
+          const jours = (t.jours || []).length > 0
+            ? t.jours.map(j => JOURS_TXT[j]).filter(Boolean).join(', ')
+            : '-';
+          const cause = (t.statut === 'non-realisee' && t.cause)
+            ? (CAUSE_TXT[t.cause.code] || 'Autre') + (t.cause.detail ? ' : ' + t.cause.detail : '')
+            : '-';
+          return [
+            t.description || '(sans description)',
+            equipe ? equipe.nom : '-',
+            jours,
+            STATUT_TXT[t.statut] || t.statut,
+            cause
+          ];
+        }),
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 9, cellPadding: 2.5, overflow: 'linebreak' },
+        columnStyles: {
+          0: { cellWidth: 55 },
+          1: { cellWidth: 28 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 'auto' }
+        },
+        margin: { left: margin, right: margin }
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    } else {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text('Aucun engagement enregistre pour cette semaine.', margin, y + 4);
+      y += 12;
+    }
+
+    // --- Tableau des causes (si des tâches non réalisées) ---
+    if (causes.length > 0 && doc.autoTable) {
+      if (y > 240) { doc.addPage(); y = margin; }
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(100, 116, 139);
+      doc.text('ANALYSE DES CAUSES DE NON-REALISATION', margin, y);
+      y += 2;
+
+      const totalCauses = causes.reduce((s, c) => s + c.count, 0);
+      doc.autoTable({
+        startY: y + 2,
+        head: [['Cause racine', 'Nombre', 'Part']],
+        body: causes.map(c => [
+          c.label,
+          String(c.count),
+          totalCauses > 0 ? Math.round((c.count / totalCauses) * 100) + ' %' : '-'
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [239, 68, 68], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 9, cellPadding: 2.5 },
+        columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' } },
+        margin: { left: margin, right: margin }
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    }
+
+    // --- Pied de page ---
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`${entreprise.nom || 'ChantierPro'} - Bilan LPS Semaine ${numSem} - Page ${i}/${pageCount}`,
+        pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
+    }
+
+    doc.save(`Bilan_LPS_S${numSem}_${key.split('-')[0]}.pdf`);
+    Toast.success('Bilan LPS exporte en PDF');
   }
 })();
