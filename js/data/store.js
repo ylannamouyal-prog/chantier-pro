@@ -23,6 +23,7 @@ const Store = {
     commandes:    [],       // bons de commande fournisseurs
     articlesSpecifiques: [], // articles sur-mesure par chantier (vitrage, store...) avec cycle de vie
     tachesLPS:    [],       // Last Planner System : engagements hebdomadaires
+    lpsEcartes:   [],       // engagements auto écartés manuellement : ["chantierId__semaine"]
     rdvs:         [],       // rendez-vous (visites, métrés, etc.)
     modeles:      [],       // modèles de chantier (bibliothèque de fournitures par type)
     equipes:      [],       // équipes avec couleur
@@ -461,6 +462,7 @@ const Store = {
       statut: 'en-attente',      // en-attente | engagee | terminee | non-realisee
       contraintes: {},           // { materiel: true, equipe: false, ... }
       cause: null,               // { code, detail } si non réalisée
+      source: 'manuel',          // 'manuel' ou 'auto' (généré depuis un chantier)
       createdAt: new Date().toISOString(),
       ...data
     };
@@ -480,7 +482,63 @@ const Store = {
 
   deleteTacheLPS(id) {
     this.commit('lps:delete', s => {
-      s.tachesLPS = (s.tachesLPS || []).filter(t => t.id !== id);
+      const t = (s.tachesLPS || []).find(x => x.id === id);
+      // Si c'est un engagement généré auto, on le mémorise comme "écarté"
+      // pour qu'il ne réapparaisse pas à la prochaine synchro
+      if (t && t.source === 'auto' && t.chantierId) {
+        if (!s.lpsEcartes) s.lpsEcartes = [];
+        const cle = `${t.chantierId}__${t.semaine}`;
+        if (!s.lpsEcartes.includes(cle)) s.lpsEcartes.push(cle);
+      }
+      s.tachesLPS = (s.tachesLPS || []).filter(x => x.id !== id);
+    });
+  },
+
+  /** Statuts de chantier "planifiables" (prêts à être engagés dans le LPS) */
+  STATUTS_PLANIFIABLES_LPS: ['commande', 'prevu', 'en-cours'],
+
+  /**
+   * Synchronise le LPS avec les chantiers : pour la semaine donnée,
+   * crée automatiquement un engagement pour chaque chantier planifiable
+   * actif cette semaine (s'il n'existe pas déjà et n'a pas été écarté).
+   * Ne modifie jamais les engagements existants.
+   */
+  syncLPSFromChantiers(semaine) {
+    const { lundi, dimanche } = this.getSemaineDates(semaine);
+    const ecartes = this.state.lpsEcartes || [];
+    const dejaPresents = this.getTachesLPSBySemaine(semaine).map(t => t.chantierId).filter(Boolean);
+
+    (this.state.chantiers || []).forEach(c => {
+      const statut = Helpers.computeStatus(c);
+      if (!this.STATUTS_PLANIFIABLES_LPS.includes(statut)) return;
+      if (!c.dateDebut || !c.dateFin) return;
+
+      // Le chantier est-il actif pendant cette semaine ?
+      const debut = new Date(c.dateDebut); debut.setHours(0, 0, 0, 0);
+      const fin = new Date(c.dateFin); fin.setHours(23, 59, 59, 999);
+      if (!(debut <= dimanche && fin >= lundi)) return;
+
+      // Déjà un engagement pour ce chantier cette semaine ? ou écarté ?
+      if (dejaPresents.includes(c.id)) return;
+      if (ecartes.includes(`${c.id}__${semaine}`)) return;
+
+      // Jours de la semaine (lun-ven) où le chantier est actif
+      const jours = [];
+      for (let j = 1; j <= 5; j++) {
+        const jour = new Date(lundi);
+        jour.setDate(lundi.getDate() + (j - 1));
+        jour.setHours(12, 0, 0, 0);
+        if (jour >= debut && jour <= fin) jours.push(j);
+      }
+
+      this.addTacheLPS({
+        chantierId: c.id,
+        equipeId: c.equipeId || null,
+        description: c.titre || c.numero || 'Chantier',
+        semaine,
+        jours,
+        source: 'auto'
+      });
     });
   },
 
