@@ -17,14 +17,14 @@ window.PdfExport = (function () {
 
     (cotes || []).forEach(cote => {
       const cat = (Store.state.categoriesCotes || []).find(c => c.id === cote.categorieId);
-      if (!cat || !cat.modeleId) return; // pas de modèle associé → pas de calcul auto
+      if (!cat || !cat.modeleId) return; // pas de modèle associé -> pas de calcul auto
 
       const modele = (Store.state.modeles || []).find(m => m.id === cat.modeleId);
       if (!modele || !modele.lignes) return;
 
       const qte = cote.quantite || 1;
-      const largeur = (cote.largeur || 0) / 1000;  // mm → m
-      const hauteur = (cote.hauteur || 0) / 1000;  // mm → m
+      const largeur = (cote.largeur || 0) / 1000;  // mm -> m
+      const hauteur = (cote.hauteur || 0) / 1000;  // mm -> m
       const surface = largeur * hauteur * qte;
       const perimetre = 2 * (largeur + hauteur) * qte;
 
@@ -86,7 +86,7 @@ window.PdfExport = (function () {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     if (entreprise.adresse) doc.text(entreprise.adresse, margin, 22);
-    const contactLine = [entreprise.telephone, entreprise.email].filter(Boolean).join(' • ');
+    const contactLine = [entreprise.telephone, entreprise.email].filter(Boolean).join(' - ');
     if (contactLine) doc.text(contactLine, margin, 28);
     if (entreprise.siret) doc.text(`SIRET : ${entreprise.siret}`, margin, 33);
 
@@ -151,15 +151,15 @@ window.PdfExport = (function () {
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(15, 23, 42);
         contactsPdf.forEach(ct => {
-          const line1 = ct.nom + (ct.role ? ' — ' + ct.role : '');
+          const line1 = ct.nom + (ct.role ? ' - ' + ct.role : '');
           doc.text(line1, margin + 3, yc); yc += 3.5;
           const contactInfos = [];
-          if (ct.telephone) contactInfos.push('☎ ' + ct.telephone);
-          if (ct.email) contactInfos.push('✉ ' + ct.email);
+          if (ct.telephone) contactInfos.push('Tel: ' + ct.telephone);
+          if (ct.email) contactInfos.push('Email: ' + ct.email);
           if (contactInfos.length > 0) {
             doc.setFontSize(8);
             doc.setTextColor(100, 116, 139);
-            doc.text(contactInfos.join('  ·  '), margin + 3, yc); yc += 4;
+            doc.text(contactInfos.join('  -  '), margin + 3, yc); yc += 4;
             doc.setFontSize(10);
             doc.setTextColor(15, 23, 42);
           }
@@ -185,8 +185,8 @@ window.PdfExport = (function () {
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(`Conducteur : ${conducteur?.nom || '—'}`, margin, y);
-    doc.text(`Équipe : ${equipe?.nom || '—'}`, margin + 80, y);
+    doc.text(`Conducteur : ${conducteur?.nom || '-'}`, margin, y);
+    doc.text(`Équipe : ${equipe?.nom || '-'}`, margin + 80, y);
     y += 10;
 
     // Cotes
@@ -266,7 +266,7 @@ window.PdfExport = (function () {
         doc.setFontSize(8);
         doc.setFont('helvetica', 'italic');
         doc.setTextColor(100, 116, 139);
-        doc.text('* Prix indicatif (fourniture non trouvée dans le stock — à ajuster dans la page Stocks)', margin, y);
+        doc.text('* Prix indicatif (fourniture non trouvée dans le stock - à ajuster dans la page Stocks)', margin, y);
         y += 6;
       } else {
         y += 4;
@@ -326,7 +326,7 @@ window.PdfExport = (function () {
 
           const CATS = {
             'location': 'Location', 'carburant': 'Carburant',
-            'main-oeuvre': "Main d'œuvre", 'sous-traitance': 'Sous-traitance', 'autre': 'Autre'
+            'main-oeuvre': "Main d'oeuvre", 'sous-traitance': 'Sous-traitance', 'autre': 'Autre'
           };
 
           doc.autoTable({
@@ -335,7 +335,7 @@ window.PdfExport = (function () {
             body: bilan.manuelles.map(d => [
               d.libelle,
               CATS[d.categorie] || 'Autre',
-              d.date ? Format.dateShort(d.date) : '—',
+              d.date ? Format.dateShort(d.date) : '-',
               (parseFloat(d.montant) || 0).toFixed(2) + ' €'
             ]),
             foot: [['', '', 'SOUS-TOTAL', bilan.totalManuelles.toFixed(2) + ' €']],
@@ -444,7 +444,7 @@ window.PdfExport = (function () {
       doc.setPage(i);
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
-      doc.text(`${entreprise.nom || 'ChantierPro'} • Page ${i}/${pageCount}`,
+      doc.text(`${entreprise.nom || 'ChantierPro'} - Page ${i}/${pageCount}`,
         pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
     }
 
@@ -704,7 +704,7 @@ window.PdfExport = (function () {
 
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(10);
-    doc.text(`${mvts.length} mouvement(s) · ${entrees} entrée(s) · ${sorties} sortie(s)${transferts ? ' · ' + transferts + ' transfert(s)' : ''}`, margin, 32);
+    doc.text(`${mvts.length} mouvement(s) - ${entrees} entrée(s) - ${sorties} sortie(s)${transferts ? ' - ' + transferts + ' transfert(s)' : ''}`, margin, 32);
 
     if (doc.autoTable) {
       doc.autoTable({
@@ -718,10 +718,10 @@ window.PdfExport = (function () {
           return [
             Format.dateShort(m.date),
             typeLabel,
-            f?.nom || '—',
+            f?.nom || '-',
             (m.type === 'sortie' ? '-' : m.type === 'entree' ? '+' : '') + m.quantite + ' ' + (f?.unite || ''),
             empLabel,
-            m.motif || '—'
+            m.motif || '-'
           ];
         }),
         theme: 'striped',
@@ -737,7 +737,7 @@ window.PdfExport = (function () {
       doc.setPage(i);
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
-      doc.text(`${entreprise.nom || 'ChantierPro'} • Page ${i}/${pageCount}`,
+      doc.text(`${entreprise.nom || 'ChantierPro'} - Page ${i}/${pageCount}`,
         pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
     }
 
@@ -799,7 +799,7 @@ window.PdfExport = (function () {
         body: rows.map(({ f, qte }) => {
           const sousSeuil = qte <= (f.seuilAlerte || 0);
           return [
-            f.reference || '—',
+            f.reference || '-',
             f.nom,
             { content: String(qte), styles: { fontStyle: sousSeuil ? 'bold' : 'normal', textColor: sousSeuil ? [220, 38, 38] : [15, 23, 42] } },
             f.unite || '',
@@ -820,12 +820,12 @@ window.PdfExport = (function () {
     };
 
     // Atelier
-    drawStockSection('🏭 Atelier', Store.state.stockAtelier || {}, [59, 130, 246]);
+    drawStockSection('Atelier', Store.state.stockAtelier || {}, [59, 130, 246]);
 
     // Chaque camion / équipe
     (Store.state.equipes || []).forEach(eq => {
       const stockCamion = (Store.state.stockCamions || {})[eq.id] || {};
-      drawStockSection(`🚚 ${eq.nom}`, stockCamion, [16, 185, 129]);
+      drawStockSection(`Camion ${eq.nom}`, stockCamion, [16, 185, 129]);
     });
 
     // Valeur totale globale
@@ -849,7 +849,7 @@ window.PdfExport = (function () {
       doc.setPage(i);
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
-      doc.text(`${entreprise.nom || 'ChantierPro'} • Page ${i}/${pageCount}`,
+      doc.text(`${entreprise.nom || 'ChantierPro'} - Page ${i}/${pageCount}`,
         pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
     }
 
@@ -858,7 +858,7 @@ window.PdfExport = (function () {
   }
 
   // ============================================================
-  // EXPORT PDF — LISTE DES CLIENTS
+  // EXPORT PDF - LISTE DES CLIENTS
   // ============================================================
   function clients() {
     const JsPDF = getJsPDF();
@@ -882,7 +882,7 @@ window.PdfExport = (function () {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     if (entreprise.adresse) doc.text(entreprise.adresse, margin, 22);
-    const contactLine = [entreprise.telephone, entreprise.email].filter(Boolean).join(' • ');
+    const contactLine = [entreprise.telephone, entreprise.email].filter(Boolean).join(' - ');
     if (contactLine) doc.text(contactLine, margin, 28);
 
     doc.setFontSize(10);
@@ -902,7 +902,7 @@ window.PdfExport = (function () {
         const nbChantiers = (Store.state.chantiers || []).filter(ch => ch.clientId === c.id).length;
         const adresse = [c.adresse, c.codePostal, c.ville].filter(Boolean).join(', ');
         return [
-          c.nom || '—',
+          c.nom || '-',
           c.entreprise || '',
           c.telephone ? Format.phone(c.telephone) : '',
           c.email || '',
@@ -931,7 +931,7 @@ window.PdfExport = (function () {
       doc.setPage(i);
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
-      doc.text(`${entreprise.nom || 'ChantierPro'} • Page ${i}/${pageCount}`,
+      doc.text(`${entreprise.nom || 'ChantierPro'} - Page ${i}/${pageCount}`,
         pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
     }
 
@@ -999,11 +999,11 @@ window.PdfExport = (function () {
       coutTotal += cout;
       return [
         Format.dateShort(r.dateDebut) + ' au ' + Format.dateShort(r.dateFin),
-        engin?.nom || '—',
-        (engin?.disponibilite === 'location' ? '🔑 Location' : '🏭 Atelier'),
-        chantier?.numero || '—',
+        engin?.nom || '-',
+        (engin?.disponibilite === 'location' ? 'Location' : 'Atelier'),
+        chantier?.numero || '-',
         jours + ' j',
-        cout > 0 ? cout.toFixed(2) + ' €' : '—'
+        cout > 0 ? cout.toFixed(2) + ' €' : '-'
       ];
     });
 
@@ -1027,7 +1027,7 @@ window.PdfExport = (function () {
       doc.setPage(i);
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
-      doc.text(`${entreprise.nom || 'ChantierPro'} • Page ${i}/${pageCount}`,
+      doc.text(`${entreprise.nom || 'ChantierPro'} - Page ${i}/${pageCount}`,
         pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
     }
 
@@ -1036,7 +1036,7 @@ window.PdfExport = (function () {
   }
 
   // ============================================================
-  // EXPORT PDF — BILAN LAST PLANNER SYSTEM (LPS)
+  // EXPORT PDF - BILAN LAST PLANNER SYSTEM (LPS)
   // ============================================================
   function lps(semaine) {
     const JsPDF = getJsPDF();
