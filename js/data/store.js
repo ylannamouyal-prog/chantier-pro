@@ -24,6 +24,7 @@ const Store = {
     articlesSpecifiques: [], // articles sur-mesure par chantier (vitrage, store...) avec cycle de vie
     tachesLPS:    [],       // Last Planner System : engagements hebdomadaires
     lpsEcartes:   [],       // engagements auto écartés manuellement : ["chantierId__semaine"]
+    contraintesLPS: null,   // liste personnalisable des contraintes (null = valeurs par défaut)
     rdvs:         [],       // rendez-vous (visites, métrés, etc.)
     modeles:      [],       // modèles de chantier (bibliothèque de fournitures par type)
     equipes:      [],       // équipes avec couleur
@@ -396,13 +397,50 @@ const Store = {
   // ============================================================
 
   /** Contraintes à lever avant d'engager une tâche */
-  CONTRAINTES_LPS: [
-    { id: 'materiel', label: 'Matériel disponible en stock', icon: '📦', auto: true },
-    { id: 'equipe',   label: 'Équipe disponible',            icon: '👷', auto: true },
-    { id: 'acces',    label: 'Accès chantier / client confirmé', icon: '🔑', auto: false },
-    { id: 'plans',    label: 'Plans / documents validés',    icon: '📐', auto: false },
-    { id: 'meteo',    label: 'Météo compatible',             icon: '🌤️', auto: false }
+  /** Contraintes par défaut (à la 1ère utilisation) — toutes manuelles */
+  CONTRAINTES_LPS_DEFAUT: [
+    { id: 'materiel', label: 'Matériel disponible en stock',      icon: '📦' },
+    { id: 'equipe',   label: 'Équipe disponible',                 icon: '👷' },
+    { id: 'acces',    label: 'Accès chantier / client confirmé',  icon: '🔑' },
+    { id: 'plans',    label: 'Plans / documents validés',         icon: '📐' },
+    { id: 'meteo',    label: 'Météo compatible',                  icon: '🌤️' }
   ],
+
+  /** Retourne la liste des contraintes (personnalisée ou par défaut) */
+  getContraintesLPS() {
+    if (!this.state.contraintesLPS) {
+      // Initialise avec les valeurs par défaut à la première lecture
+      this.state.contraintesLPS = this.CONTRAINTES_LPS_DEFAUT.map(c => ({ ...c }));
+    }
+    return this.state.contraintesLPS;
+  },
+
+  addContrainteLPS(label, icon) {
+    const contrainte = {
+      id: Helpers.uid('contr_'),
+      label: (label || '').trim() || 'Nouvelle contrainte',
+      icon: icon || '✔️'
+    };
+    this.commit('lps:addContrainte', s => {
+      if (!s.contraintesLPS) s.contraintesLPS = this.CONTRAINTES_LPS_DEFAUT.map(c => ({ ...c }));
+      s.contraintesLPS.push(contrainte);
+    });
+    return contrainte;
+  },
+
+  updateContrainteLPS(id, patch) {
+    this.commit('lps:updateContrainte', s => {
+      const c = (s.contraintesLPS || []).find(x => x.id === id);
+      if (c) Object.assign(c, patch);
+    });
+  },
+
+  deleteContrainteLPS(id) {
+    this.commit('lps:deleteContrainte', s => {
+      if (!s.contraintesLPS) return;
+      s.contraintesLPS = s.contraintesLPS.filter(c => c.id !== id);
+    });
+  },
 
   /** Causes racines de non-réalisation */
   CAUSES_LPS: [
@@ -601,19 +639,13 @@ const Store = {
     return result;
   },
 
-  /** Liste les contraintes bloquantes d'une tâche (auto + manuelles) */
+  /** Liste les contraintes bloquantes d'une tâche (toutes manuelles, décochées = bloquantes) */
   getContraintesBloquantes(tache) {
-    const auto = this.verifierContraintesAuto(tache);
+    const contraintes = this.getContraintesLPS();
     const bloquantes = [];
-    this.CONTRAINTES_LPS.forEach(c => {
-      if (c.auto) {
-        if (auto[c.id] === false) {
-          bloquantes.push({ ...c, detail: auto.details[c.id] || '' });
-        }
-      } else {
-        if (!(tache.contraintes && tache.contraintes[c.id])) {
-          bloquantes.push({ ...c, detail: '' });
-        }
+    contraintes.forEach(c => {
+      if (!(tache.contraintes && tache.contraintes[c.id])) {
+        bloquantes.push({ ...c, detail: '' });
       }
     });
     return bloquantes;
