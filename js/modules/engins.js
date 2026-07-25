@@ -252,6 +252,9 @@ window.Engins = (function () {
             <input id="r_fin" class="form-input" type="date">
           </div>
           <div class="form-field form-field--full">
+            <p class="hint">💡 Les dates se remplissent avec celles du chantier — modifiables si besoin.</p>
+          </div>
+          <div class="form-field form-field--full">
             <label>Notes</label>
             <textarea id="r_notes" class="form-textarea" rows="2"></textarea>
           </div>
@@ -282,6 +285,16 @@ window.Engins = (function () {
         };
         document.getElementById('r_debut')?.addEventListener('change', checkConflict);
         document.getElementById('r_fin')?.addEventListener('change', checkConflict);
+
+        // Pré-remplit les dates avec celles du chantier sélectionné
+        document.getElementById('r_chantier')?.addEventListener('change', (e) => {
+          const chantier = Store.state.chantiers.find(c => c.id === e.target.value);
+          if (chantier && chantier.dateDebut && chantier.dateFin) {
+            document.getElementById('r_debut').value = (chantier.dateDebut || '').slice(0, 10);
+            document.getElementById('r_fin').value = (chantier.dateFin || '').slice(0, 10);
+            checkConflict();
+          }
+        });
 
         document.getElementById('rSave').addEventListener('click', () => {
           const chantierId = document.getElementById('r_chantier').value;
