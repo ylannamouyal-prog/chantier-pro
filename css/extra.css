@@ -3115,6 +3115,15 @@ a.btn-icon:hover {
 }
 
 /* Checklist (modale) */
+.lps-add-contrainte {
+  display: flex;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+  align-items: center;
+}
+.lps-add-contrainte .form-input { flex: 1; }
+.lps-del-contr { flex-shrink: 0; }
+
 .lps-checklist { display: flex; flex-direction: column; gap: 8px; }
 .lps-check-row {
   display: flex;
