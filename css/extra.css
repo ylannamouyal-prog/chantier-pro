@@ -4602,3 +4602,111 @@ a.btn-icon:hover {
     min-width: 600px;
   }
 }
+
+/* ============================================================
+   SYNCHRO CLOUD — Écran de connexion + indicateur
+   ============================================================ */
+.cloud-login {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-4);
+  background: var(--bg-app);
+}
+.cloud-login__card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: var(--s-5);
+  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.12);
+}
+.cloud-login__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+.cloud-login__logo {
+  font-size: 32px;
+  line-height: 1;
+}
+.cloud-login__name {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-lg);
+}
+.cloud-login__sub {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.cloud-login__label {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: var(--s-3) 0 6px;
+}
+.cloud-login__btn {
+  width: 100%;
+  margin-top: var(--s-4);
+  justify-content: center;
+}
+.cloud-login__error {
+  margin-top: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  background: var(--danger-bg, #fef2f2);
+  color: var(--danger, #dc2626);
+  border-radius: 8px;
+  font-size: var(--fs-sm);
+}
+.cloud-login__hint {
+  margin-top: var(--s-3);
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary, var(--text-secondary));
+}
+
+/* Indicateur de synchro (bas gauche) */
+.cloud-sync {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 8000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.10);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+.cloud-sync__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  flex-shrink: 0;
+}
+.cloud-sync.is-saving .cloud-sync__dot { background: #f59e0b; animation: cloudPulse 1s infinite; }
+.cloud-sync.is-pending .cloud-sync__dot { background: #f59e0b; }
+.cloud-sync.is-error .cloud-sync__dot { background: #ef4444; }
+.cloud-sync.is-saved .cloud-sync__dot { background: #10b981; }
+@keyframes cloudPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.cloud-sync__logout {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.cloud-sync__logout:hover { color: var(--danger, #dc2626); }
