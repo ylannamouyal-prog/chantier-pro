@@ -193,9 +193,40 @@
     }
   }
 
-  function boot() {
-    // 1) Load store
-    Store.load();
+  async function boot() {
+    // --- Synchro cloud : vérifie la connexion avant de démarrer l'app ---
+    const client = (window.Cloud && Cloud.init) ? Cloud.init() : null;
+
+    if (!client) {
+      // Librairie cloud absente → mode hors-ligne (localStorage seul)
+      Store.load();
+      bootApp();
+      return;
+    }
+
+    const session = await Cloud.getSession();
+    if (!session) {
+      // Pas connecté → écran de connexion, on ne démarre pas l'app
+      Cloud.renderLogin();
+      return;
+    }
+
+    // Connecté : on charge les données
+    Cloud.beginSession(session);
+    Store.load(); // base locale (secours)
+    const cloudData = await Cloud.loadState();
+    if (cloudData && Object.keys(cloudData).length > 0) {
+      // Le cloud fait foi (synchro entre appareils)
+      Store.hydrate(cloudData);
+    } else {
+      // Cloud vide (1re fois) → on y envoie tes données locales actuelles
+      await Cloud.saveNow(Store.state);
+    }
+    Cloud.activate(); // à partir de maintenant, chaque modif part au cloud
+    bootApp();
+  }
+
+  function bootApp() {
     // 2) If empty, load demo
     if (Store.state.chantiers.length === 0 && Store.state.clients.length === 0) {
       Store.loadDemoData();
