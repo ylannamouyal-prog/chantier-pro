@@ -227,12 +227,22 @@ window.Stocks = (function () {
         message: searchQuery ? 'Aucun résultat pour cette recherche.' : 'Ajoutez les articles sur-mesure de vos chantiers (vitrage, store, porte spéciale...).',
         action: !searchQuery ? '<button class="btn btn--primary" onclick="document.getElementById(\'addArticleBtn\')?.click()">+ Nouvel article</button>' : ''
       }) : `
-        ${articlesChantier.length > 0 ? `
-          <div class="art-section-title">🏗️ Articles par chantier</div>
-          <div class="art-list">
-            ${articlesChantier.map(a => renderArticleCard(a, STATUTS)).join('')}
-          </div>
-        ` : ''}
+        ${articlesChantier.length > 0 ? ['a-commander', 'commande', 'livre', 'pose'].map(st => {
+          const group = articlesChantier.filter(a => a.statut === st);
+          if (group.length === 0) return '';
+          const info = STATUTS[st];
+          const valeurGroupe = group.reduce((s, a) => s + (a.quantite * (a.prixUnitaire || 0)), 0);
+          return `
+            <div class="art-section-title" style="margin-top:var(--s-4)">
+              ${info.icon} ${info.label}
+              <span class="art-section-count">${group.length}</span>
+              <span class="art-section-value">${Format.euro(valeurGroupe)}</span>
+            </div>
+            <div class="art-list">
+              ${group.map(a => renderArticleCard(a, STATUTS)).join('')}
+            </div>
+          `;
+        }).join('') : ''}
 
         ${articlesLibres.length > 0 ? `
           <div class="art-section-title" style="margin-top:var(--s-4)">🏭 Stock atelier (non assigné)</div>
