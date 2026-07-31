@@ -2599,6 +2599,30 @@ a.btn-icon:hover {
   font-weight: 700;
   font-family: 'Bricolage Grotesque', sans-serif;
   margin-bottom: var(--s-3);
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.art-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: var(--bg-sunken);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-family: system-ui, sans-serif;
+}
+.art-section-value {
+  margin-left: auto;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: system-ui, sans-serif;
 }
 .art-list {
   display: grid;
