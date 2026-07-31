@@ -61,30 +61,38 @@ const Store = {
     });
   },
 
+  /** Applique un objet de données dans le state (merge en préservant la structure) */
+  hydrate(data) {
+    if (data && typeof data === 'object') {
+      this.state = { ...this.state, ...data };
+      if (!this.state.parametres) this.state.parametres = { entreprise: {}, theme: 'light' };
+      if (!this.state.parametres.entreprise) this.state.parametres.entreprise = {};
+    }
+  },
+
   /** Charge depuis localStorage */
   load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const data = JSON.parse(raw);
-        // Merge en préservant la structure par défaut (compat évolutive)
-        this.state = { ...this.state, ...data };
-        // Garantir que les sous-objets existent
-        if (!this.state.parametres) this.state.parametres = { entreprise: {}, theme: 'light' };
-        if (!this.state.parametres.entreprise) this.state.parametres.entreprise = {};
+        this.hydrate(JSON.parse(raw));
       }
     } catch (e) {
       console.error('Erreur chargement store:', e);
     }
   },
 
-  /** Sauvegarde dans localStorage */
+  /** Sauvegarde dans localStorage (+ cloud si connecté) */
   save() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
     } catch (e) {
       console.error('Erreur sauvegarde:', e);
       Toast.error('Impossible de sauvegarder. Espace de stockage saturé ?');
+    }
+    // Synchro cloud (si connecté) — le localStorage ci-dessus reste le secours
+    if (window.Cloud && Cloud.isReady && Cloud.isReady()) {
+      Cloud.scheduleSave(this.state);
     }
   },
 
