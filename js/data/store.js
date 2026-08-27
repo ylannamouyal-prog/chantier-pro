@@ -2335,6 +2335,7 @@ const Store = {
       // Vérifier qu'il n'existe pas déjà dans le personnel
       const exists = this.state.personnel.some(p =>
         p._legacyConducteurId === c.id ||
+        p.id === c.id ||
         (p.role === 'conducteur' && p.nom === c.nom)
       );
       if (exists) return;
@@ -2403,6 +2404,21 @@ const Store = {
         migrated++;
       });
     });
+
+    // Pont de compatibilité : reconstruit state.conducteurs depuis le personnel
+    // pour que TOUS les menus déroulants (chantier, RDV, planning, dashboard...)
+    // retrouvent les conducteurs, même créés directement dans Personnel.
+    // On garde l'ancien id (_legacyConducteurId) quand il existe, pour que les
+    // chantiers/RDV déjà rattachés continuent de correspondre.
+    this.state.conducteurs = (this.state.personnel || [])
+      .filter(p => p.role === 'conducteur' && p.actif !== false)
+      .map(p => ({
+        id: p._legacyConducteurId || p.id,
+        nom: [p.prenom, p.nom].filter(Boolean).join(' ') || p.nom || 'Sans nom',
+        couleur: p.couleur || '#3b82f6',
+        telephone: p.telephone || '',
+        email: p.email || ''
+      }));
 
     if (migrated > 0) {
       this.save();
