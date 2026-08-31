@@ -62,15 +62,24 @@ const Helpers = {
     const manual = ['en-attente-cotes', 'en-attente-devis', 'commande', 'reporte'];
     if (manual.includes(chantier.statut)) return chantier.statut;
 
+    // Lit une date "YYYY-MM-DD" comme une date LOCALE à minuit
+    // (évite le décalage de fuseau horaire qui faussait le statut).
+    const toLocalDate = (s) => {
+      if (!s) return null;
+      const [y, m, d] = String(s).slice(0, 10).split('-').map(Number);
+      if (!y || !m || !d) return null;
+      return new Date(y, m - 1, d);
+    };
+
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    const start = chantier.dateDebut ? new Date(chantier.dateDebut) : null;
-    const end   = chantier.dateFin   ? new Date(chantier.dateFin)   : null;
+    const start = toLocalDate(chantier.dateDebut);
+    const end   = toLocalDate(chantier.dateFin);
 
     if (start && end) {
-      if (now < start) return 'prevu';
-      if (now > end) return 'termine';
-      return 'en-cours';
+      if (now < start) return 'prevu';    // pas encore commencé
+      if (now > end) return 'termine';    // le jour de fin reste "en cours" ; terminé le lendemain
+      return 'en-cours';                  // entre le début et la fin (bornes incluses)
     }
     return chantier.statut || 'en-attente-cotes';
   },
