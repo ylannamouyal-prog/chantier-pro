@@ -229,7 +229,14 @@ window.Engins = (function () {
   function openReservation(enginId) {
     const engin = Store.state.engins.find(e => e.id === enginId);
     if (!engin) return;
-    const chantiers = Store.state.chantiers.filter(c => Helpers.computeStatus(c) !== 'termine');
+    // Tous les chantiers : actifs/à venir d'abord, terminés regroupés en bas.
+    // (On n'en cache aucun, pour pouvoir réserver un engin sur n'importe quel chantier.)
+    const rangStatut = (c) => Helpers.computeStatus(c) === 'termine' ? 1 : 0;
+    const chantiers = [...Store.state.chantiers].sort((a, b) => {
+      const r = rangStatut(a) - rangStatut(b);
+      if (r !== 0) return r;
+      return (a.numero || '').localeCompare(b.numero || '', 'fr', { numeric: true });
+    });
 
     Modal.open({
       title: `📅 Réserver ${engin.nom}`,
@@ -240,7 +247,10 @@ window.Engins = (function () {
             <label>Chantier *</label>
             <select id="r_chantier" class="form-select">
               <option value="">— Choisir un chantier —</option>
-              ${chantiers.map(c => `<option value="${c.id}">${Helpers.esc(c.numero)} — ${Helpers.esc(c.titre)}</option>`).join('')}
+              ${chantiers.map(c => {
+                const fini = Helpers.computeStatus(c) === 'termine';
+                return `<option value="${c.id}">${Helpers.esc(c.numero)} — ${Helpers.esc(c.titre)}${fini ? ' (terminé)' : ''}</option>`;
+              }).join('')}
             </select>
           </div>
           <div class="form-field">
