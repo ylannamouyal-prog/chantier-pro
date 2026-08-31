@@ -242,9 +242,11 @@ const Dashboard = {
       }
     } else {
       // Mode MOIS : 6 derniers mois glissants
+      const now = new Date();
       for (let i = 5; i >= 0; i--) {
-        const d = new Date();
-        d.setMonth(d.getMonth() - i);
+        // On construit chaque mois au 1er jour : le 1er existe dans tous les mois,
+        // donc pas de débordement (avril/juin ne "sautent" plus).
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         labels.push(d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }));
         const month = d.getMonth();
         const year = d.getFullYear();
